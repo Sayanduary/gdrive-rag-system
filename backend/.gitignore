@@ -4,10 +4,10 @@ __pycache__/
 
 .env
 
-data/chroma_db/
+# Ignore runtime data directory (ChromaDB, downloads, memory.db)
+data/
 
 credentials/
 *.json
 
 .pytest_cache/
-credentials/

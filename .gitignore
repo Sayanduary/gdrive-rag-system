@@ -1,0 +1,17 @@
+# Git Ignore Root
+
+# Backend runtime data & secrets
+backend/data/
+backend/.env
+backend/.venv/
+backend/__pycache__/
+backend/credentials/
+
+# Frontend dependencies & build output
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+
+# System / OS files
+.DS_Store
+Thumbs.db
