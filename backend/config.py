@@ -1,105 +1,44 @@
-import os
-
-from dotenv import load_dotenv
-from pydantic_settings import BaseSettings
-
-
-load_dotenv()
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
 
-    APP_NAME: str = os.getenv(
-        "APP_NAME",
-        "Google Drive RAG API"
-    )
+    APP_NAME: str = "Google Drive RAG"
 
-    APP_VERSION: str = os.getenv(
-        "APP_VERSION",
-        "1.0.0"
-    )
+    APP_VERSION: str = "1.0.0"
 
-    CHROMA_DB_PATH: str = os.getenv(
-        "CHROMA_DB_PATH",
-        "./data/chroma_db"
-    )
+    SESSION_SECRET: str = "change-me"
 
-    OLLAMA_BASE_URL: str = os.getenv(
-        "OLLAMA_BASE_URL",
-        "http://localhost:11434"
-    )
+    GOOGLE_CLIENT_ID: str = ""
 
-    OLLAMA_MODEL: str = os.getenv(
-        "OLLAMA_MODEL",
-        "qwen3:8b"
-    )
+    GOOGLE_CLIENT_SECRET: str = ""
 
-    EMBEDDING_MODEL: str = os.getenv(
-        "EMBEDDING_MODEL",
-        "BAAI/bge-small-en-v1.5"
-    )
-
-    CHUNK_SIZE: int = int(
-        os.getenv(
-            "CHUNK_SIZE",
-            "1000"
-        )
-    )
-
-    CHUNK_OVERLAP: int = int(
-        os.getenv(
-            "CHUNK_OVERLAP",
-            "150"
-        )
-    )
-
-    TOP_K: int = int(
-        os.getenv(
-            "TOP_K",
-            "5"
-        )
-    )
-
-    # ==============================================
-    # Google OAuth
-    # ==============================================
-
-    GOOGLE_CLIENT_ID: str = os.getenv(
-        "GOOGLE_CLIENT_ID",
-        ""
-    )
-
-    GOOGLE_CLIENT_SECRET: str = os.getenv(
-        "GOOGLE_CLIENT_SECRET",
-        ""
-    )
-
-    GOOGLE_REDIRECT_URI: str = os.getenv(
-        "GOOGLE_REDIRECT_URI",
+    GOOGLE_REDIRECT_URI: str = (
         "http://localhost:8000/api/auth/google/callback"
     )
 
-    SESSION_SECRET: str = os.getenv(
-        "SESSION_SECRET",
-        ""
-    )
-    # ==============================================
-    # LLM Provider
-    # ==============================================
+    TOP_K: int = 8
 
-    LLM_PROVIDER: str = os.getenv(
-        "LLM_PROVIDER",
-        "lmstudio"
-    )
+    # ==================================================
+    # LM STUDIO
+    # ==================================================
 
-    LM_STUDIO_BASE_URL: str = os.getenv(
-        "LM_STUDIO_BASE_URL",
+    LM_STUDIO_BASE_URL: str = (
         "http://localhost:1234"
     )
 
-    LM_STUDIO_MODEL: str = os.getenv(
-        "LM_STUDIO_MODEL",
+    LM_STUDIO_MODEL: str = (
         "llama-3.2-3b-instruct"
     )
+
+    LM_STUDIO_VISION_MODEL: str = (
+        "qwen2.5-vl-3b-instruct"
+    )
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        extra="ignore"
+    )
+
 
 settings = Settings()

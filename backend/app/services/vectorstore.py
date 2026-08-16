@@ -58,21 +58,22 @@ class VectorStore:
                 "texts and ids length mismatch."
             )
 
-        # ----------------------------------------------
-        # Security check:
-        # Every chunk must have a tenant identity.
-        # ----------------------------------------------
-
+        # Every chunk MUST be tenant scoped.
         for metadata in metadatas:
 
             if not metadata.get("user_id"):
                 raise ValueError(
-                    "Every document chunk must contain user_id."
+                    "Every chunk must contain user_id."
                 )
 
             if not metadata.get("folder_id"):
                 raise ValueError(
-                    "Every document chunk must contain folder_id."
+                    "Every chunk must contain folder_id."
+                )
+
+            if not metadata.get("file_id"):
+                raise ValueError(
+                    "Every chunk must contain file_id."
                 )
 
         embeddings = list(
@@ -90,17 +91,18 @@ class VectorStore:
             ids=ids,
             documents=texts,
             embeddings=embeddings,
-            metadatas=metadatas,
+            metadatas=metadatas
         )
 
     # ==================================================
-    # BUILD REQUIRED TENANT FILTER
+    # BUILD TENANT FILTER
     # ==================================================
 
-    def _tenant_filter(
+    def _build_filter(
         self,
         user_id: str,
-        folder_id: str | None = None
+        folder_id: str | None = None,
+        file_id: str | None = None
     ) -> dict:
 
         if not user_id:
@@ -121,6 +123,13 @@ class VectorStore:
                 }
             )
 
+        if file_id:
+            filters.append(
+                {
+                    "file_id": file_id
+                }
+            )
+
         if len(filters) == 1:
             return filters[0]
 
@@ -137,7 +146,8 @@ class VectorStore:
         query: str,
         top_k: int = 5,
         user_id: str | None = None,
-        folder_id: str | None = None
+        folder_id: str | None = None,
+        file_id: str | None = None
     ):
 
         if not user_id:
@@ -145,33 +155,34 @@ class VectorStore:
                 "user_id is required for Chroma search."
             )
 
-        if not query or not query.strip():
+        query = query.strip()
+
+        if not query:
+
             return {
                 "ids": [[]],
                 "documents": [[]],
                 "metadatas": [[]],
-                "distances": [[]],
+                "distances": [[]]
             }
 
         if top_k <= 0:
             top_k = 5
 
-        where = self._tenant_filter(
+        where = self._build_filter(
             user_id=user_id,
-            folder_id=folder_id
+            folder_id=folder_id,
+            file_id=file_id
         )
 
-        # ----------------------------------------------
-        # Count only current user's scope
-        # ----------------------------------------------
-
-        scoped_documents = self.collection.get(
+        # Only count records visible to this user.
+        scoped = self.collection.get(
             where=where,
             include=[]
         )
 
         scoped_count = len(
-            scoped_documents.get(
+            scoped.get(
                 "ids",
                 []
             )
@@ -183,7 +194,7 @@ class VectorStore:
                 "ids": [[]],
                 "documents": [[]],
                 "metadatas": [[]],
-                "distances": [[]],
+                "distances": [[]]
             }
 
         top_k = min(
@@ -191,19 +202,11 @@ class VectorStore:
             scoped_count
         )
 
-        # ----------------------------------------------
-        # Embed query
-        # ----------------------------------------------
-
         query_embedding = list(
             self.embedding_model.embed(
                 [query]
             )
         )[0]
-
-        # ----------------------------------------------
-        # Chroma search
-        # ----------------------------------------------
 
         return self.collection.query(
             query_embeddings=[
@@ -224,25 +227,22 @@ class VectorStore:
 
     def count(
         self,
-        user_id: str
+        user_id: str,
+        folder_id: str | None = None
     ) -> int:
 
-        if not user_id:
-            raise ValueError(
-                "user_id is required for count."
-            )
-
-        where = self._tenant_filter(
-            user_id=user_id
+        where = self._build_filter(
+            user_id=user_id,
+            folder_id=folder_id
         )
 
-        results = self.collection.get(
+        result = self.collection.get(
             where=where,
             include=[]
         )
 
         return len(
-            results.get(
+            result.get(
                 "ids",
                 []
             )
@@ -264,22 +264,25 @@ class VectorStore:
                 "user_id is required."
             )
 
-        where = {
-            "$and": [
-                {
-                    "file_id": file_id
-                },
-                {
-                    "user_id": user_id
-                },
-                {
-                    "folder_id": folder_id
-                }
-            ]
-        }
+        if not folder_id:
+            raise ValueError(
+                "folder_id is required."
+            )
 
         return self.collection.get(
-            where=where,
+            where={
+                "$and": [
+                    {
+                        "file_id": file_id
+                    },
+                    {
+                        "user_id": user_id
+                    },
+                    {
+                        "folder_id": folder_id
+                    }
+                ]
+            },
             include=[
                 "documents",
                 "metadatas"
@@ -297,7 +300,7 @@ class VectorStore:
         folder_id: str
     ) -> bool:
 
-        results = self.collection.get(
+        result = self.collection.get(
             where={
                 "$and": [
                     {
@@ -316,14 +319,14 @@ class VectorStore:
         )
 
         return bool(
-            results.get(
+            result.get(
                 "ids",
                 []
             )
         )
 
     # ==================================================
-    # GET MODIFICATION TIME
+    # GET FILE MODIFICATION TIME
     # ==================================================
 
     def get_file_modified_time(
@@ -333,7 +336,7 @@ class VectorStore:
         folder_id: str
     ):
 
-        results = self.collection.get(
+        result = self.collection.get(
             where={
                 "$and": [
                     {
@@ -353,7 +356,7 @@ class VectorStore:
             ]
         )
 
-        metadatas = results.get(
+        metadatas = result.get(
             "metadatas",
             []
         )
@@ -375,6 +378,16 @@ class VectorStore:
         user_id: str,
         folder_id: str
     ):
+
+        if not user_id:
+            raise ValueError(
+                "user_id is required."
+            )
+
+        if not folder_id:
+            raise ValueError(
+                "folder_id is required."
+            )
 
         self.collection.delete(
             where={
@@ -402,7 +415,17 @@ class VectorStore:
         folder_id: str
     ):
 
-        results = self.collection.get(
+        if not user_id:
+            raise ValueError(
+                "user_id is required for indexed files."
+            )
+
+        if not folder_id:
+            raise ValueError(
+                "folder_id is required for indexed files."
+            )
+
+        result = self.collection.get(
             where={
                 "$and": [
                     {
@@ -420,7 +443,7 @@ class VectorStore:
 
         indexed_files = {}
 
-        for metadata in results.get(
+        for metadata in result.get(
             "metadatas",
             []
         ):
@@ -443,7 +466,7 @@ class VectorStore:
                 "modified_time":
                     metadata.get(
                         "modified_time"
-                    ),
+                    )
             }
 
         return indexed_files

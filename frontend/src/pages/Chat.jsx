@@ -43,14 +43,9 @@ function Chat({ user, onSyncAnotherFolder }) {
   // ==================================================
 
   const requestInFlightRef = useRef(false);
-
   const pendingSourcesRef = useRef([]);
 
-  // IMPORTANT:
-  // This is the actual scrollable chat container.
   const messagesContainerRef = useRef(null);
-
-  // Invisible element at the very bottom of messages.
   const messagesEndRef = useRef(null);
 
   // ==================================================
@@ -58,13 +53,12 @@ function Chat({ user, onSyncAnotherFolder }) {
   // ==================================================
 
   useEffect(() => {
-    if (!messagesContainerRef.current) {
+    const container = messagesContainerRef.current;
+
+    if (!container) {
       return;
     }
 
-    const container = messagesContainerRef.current;
-
-    // Smoothly move to the latest message.
     requestAnimationFrame(() => {
       container.scrollTo({
         top: container.scrollHeight,
@@ -190,6 +184,40 @@ function Chat({ user, onSyncAnotherFolder }) {
   }
 
   // ==================================================
+  // GENERATE CHAT TITLE
+  // ==================================================
+
+  function generateChatTitle(text) {
+    const cleaned = text.replace(/\s+/g, " ").trim();
+
+    if (!cleaned) {
+      return "New Chat";
+    }
+
+    const maxLength = 45;
+
+    if (cleaned.length <= maxLength) {
+      return cleaned;
+    }
+
+    return `${cleaned.slice(0, maxLength).trim()}...`;
+  }
+
+  // ==================================================
+  // UPDATE CHAT TITLE
+  // ==================================================
+
+  async function updateChatTitle(conversationId, title) {
+    try {
+      await api.patch(`/api/conversations/${conversationId}`, {
+        title,
+      });
+    } catch (error) {
+      console.error("Failed to update conversation title:", error);
+    }
+  }
+
+  // ==================================================
   // DELETE CONVERSATION
   // ==================================================
 
@@ -273,7 +301,9 @@ function Chat({ user, onSyncAnotherFolder }) {
     try {
       const response = await api.get("/api/conversations");
 
-      setConversations(response.data.conversations || []);
+      const items = response.data.conversations || [];
+
+      setConversations(items);
     } catch {
       // Don't interrupt active chat.
     }
@@ -333,7 +363,42 @@ function Chat({ user, onSyncAnotherFolder }) {
 
     pendingSourcesRef.current = [];
 
-    // Add user message immediately.
+    // ----------------------------------------------
+    // Determine whether this is the first message
+    // ----------------------------------------------
+
+    const isFirstMessage = messages.length === 0;
+
+    // ----------------------------------------------
+    // Automatically generate title
+    // ----------------------------------------------
+
+    const generatedTitle = generateChatTitle(currentQuestion);
+
+    // ----------------------------------------------
+    // Update sidebar immediately
+    // ----------------------------------------------
+
+    if (isFirstMessage && activeConversationId) {
+      setConversations((previous) =>
+        previous.map((conversation) =>
+          conversation.id === activeConversationId
+            ? {
+                ...conversation,
+                title: generatedTitle,
+              }
+            : conversation,
+        ),
+      );
+
+      // Persist title in backend.
+      updateChatTitle(activeConversationId, generatedTitle);
+    }
+
+    // ----------------------------------------------
+    // Add user message
+    // ----------------------------------------------
+
     setMessages((previous) => [
       ...previous,
 
@@ -350,7 +415,7 @@ function Chat({ user, onSyncAnotherFolder }) {
       },
     ]);
 
-    // Clear composer immediately.
+    // Clear composer.
     setQuestion("");
 
     try {
@@ -365,6 +430,7 @@ function Chat({ user, onSyncAnotherFolder }) {
 
         body: JSON.stringify({
           question: currentQuestion,
+
           conversation_id: activeConversationId,
         }),
       });
@@ -377,7 +443,7 @@ function Chat({ user, onSyncAnotherFolder }) {
 
           detail = data.detail || detail;
         } catch {
-          // Ignore parsing failure.
+          // Ignore parsing error.
         }
 
         throw new Error(detail);
@@ -428,6 +494,24 @@ function Chat({ user, onSyncAnotherFolder }) {
               setActiveConversationId(conversationId);
 
               localStorage.setItem(ACTIVE_CHAT_KEY, String(conversationId));
+
+              // If backend created the conversation
+              // during the request, update title there.
+              if (isFirstMessage && conversationId) {
+                setConversations((previous) =>
+                  previous.map((conversation) =>
+                    conversation.id === conversationId
+                      ? {
+                          ...conversation,
+                          id: conversationId,
+                          title: generatedTitle,
+                        }
+                      : conversation,
+                  ),
+                );
+
+                updateChatTitle(conversationId, generatedTitle);
+              }
             }
 
             pendingSourcesRef.current = data.sources || [];
@@ -493,6 +577,7 @@ function Chat({ user, onSyncAnotherFolder }) {
 
               updated[lastIndex] = {
                 ...updated[lastIndex],
+
                 sources: finalSources,
               };
 
@@ -506,7 +591,7 @@ function Chat({ user, onSyncAnotherFolder }) {
         }
       }
     } catch (error) {
-      // Remove optimistic messages.
+      // Remove optimistic user + assistant messages.
       setMessages((previous) => previous.slice(0, -2));
 
       pendingSourcesRef.current = [];
@@ -528,20 +613,6 @@ function Chat({ user, onSyncAnotherFolder }) {
       event.preventDefault();
 
       askQuestion();
-    }
-  }
-
-  // ==================================================
-  // LOGOUT
-  // ==================================================
-
-  async function logout() {
-    try {
-      await api.post("/api/auth/logout");
-    } finally {
-      localStorage.removeItem(ACTIVE_CHAT_KEY);
-
-      window.location.href = "/";
     }
   }
 
@@ -569,7 +640,6 @@ function Chat({ user, onSyncAnotherFolder }) {
               transparent 1px
             )
           `,
-
           backgroundSize: "50px 50px",
         }}
       />
@@ -592,7 +662,7 @@ function Chat({ user, onSyncAnotherFolder }) {
         ================================================== */}
 
         <aside className="hidden w-72 shrink-0 border-r border-white/[0.06] bg-[#101010]/80 backdrop-blur-xl lg:flex lg:flex-col">
-          {/* Sidebar Header */}
+          {/* Header */}
           <div className="flex items-center justify-between border-b border-white/[0.06] p-4">
             <p className="text-sm font-medium text-neutral-300">
               Conversations
@@ -600,7 +670,7 @@ function Chat({ user, onSyncAnotherFolder }) {
 
             <button
               onClick={createNewChat}
-              disabled={loading || requestInFlightRef.current}
+              disabled={loading}
               className="
                 flex
                 h-8
@@ -624,7 +694,7 @@ function Chat({ user, onSyncAnotherFolder }) {
             </button>
           </div>
 
-          {/* Conversations */}
+          {/* Conversation List */}
           <div className="flex-1 overflow-y-auto p-3">
             {loadingConversations ? (
               <div className="px-2 py-4 text-xs text-neutral-600">
@@ -637,7 +707,8 @@ function Chat({ user, onSyncAnotherFolder }) {
             ) : (
               <div className="space-y-1">
                 {conversations.map((conversation) => {
-                  const active = activeConversationId === conversation.id;
+                  const active =
+                    String(activeConversationId) === String(conversation.id);
 
                   return (
                     <div
@@ -657,6 +728,7 @@ function Chat({ user, onSyncAnotherFolder }) {
                           }
                         `}
                     >
+                      {/* Conversation */}
                       <button
                         onClick={() => loadConversation(conversation.id)}
                         disabled={loading}
@@ -673,11 +745,12 @@ function Chat({ user, onSyncAnotherFolder }) {
                           <FiMessageSquare className="shrink-0 text-xs text-neutral-600" />
 
                           <span className="truncate text-xs text-neutral-300">
-                            {conversation.title}
+                            {conversation.title || "New Chat"}
                           </span>
                         </div>
                       </button>
 
+                      {/* Rename */}
                       <button
                         onClick={() => renameConversation(conversation)}
                         disabled={loading}
@@ -700,6 +773,7 @@ function Chat({ user, onSyncAnotherFolder }) {
                         <FiEdit2 className="text-xs" />
                       </button>
 
+                      {/* Delete */}
                       <button
                         onClick={() => deleteConversation(conversation.id)}
                         disabled={loading}
@@ -766,7 +840,7 @@ function Chat({ user, onSyncAnotherFolder }) {
 
         <main className="relative min-w-0 flex-1">
           {/* ==================================================
-              MESSAGE SCROLL CONTAINER
+              MESSAGE SCROLL
           ================================================== */}
 
           <div
@@ -781,7 +855,6 @@ function Chat({ user, onSyncAnotherFolder }) {
               sm:px-6
             "
           >
-            {/* Content wrapper */}
             <div className="mx-auto w-full max-w-3xl">
               {/* ==================================================
                   EMPTY STATE
@@ -808,7 +881,6 @@ function Chat({ user, onSyncAnotherFolder }) {
                         onClick={() =>
                           setQuestion("How many documents are available?")
                         }
-                        disabled={loading}
                         className="
                           rounded-xl
                           border
@@ -819,7 +891,6 @@ function Chat({ user, onSyncAnotherFolder }) {
                           transition
                           hover:border-white/[0.14]
                           hover:bg-white/[0.04]
-                          disabled:opacity-50
                         "
                       >
                         <p className="text-xs font-medium text-neutral-300">
@@ -835,7 +906,6 @@ function Chat({ user, onSyncAnotherFolder }) {
                         onClick={() =>
                           setQuestion("Summarize the important information.")
                         }
-                        disabled={loading}
                         className="
                           rounded-xl
                           border
@@ -846,7 +916,6 @@ function Chat({ user, onSyncAnotherFolder }) {
                           transition
                           hover:border-white/[0.14]
                           hover:bg-white/[0.04]
-                          disabled:opacity-50
                         "
                       >
                         <p className="text-xs font-medium text-neutral-300">
@@ -881,83 +950,36 @@ function Chat({ user, onSyncAnotherFolder }) {
                             : "flex justify-start"
                         }
                       >
-                        {/* ==================================================
-                              USER MESSAGE
-                          ================================================== */}
-
+                        {/* USER */}
                         {message.role === "user" ? (
                           <div className="flex w-full justify-end">
                             <div className="flex max-w-[85%] items-start gap-3 sm:max-w-[75%]">
-                              <div
-                                className="
-                                    rounded-2xl
-                                    rounded-tr-md
-                                    border
-                                    border-white/[0.08]
-                                    bg-white/[0.07]
-                                    px-4
-                                    py-3
-                                    shadow-sm
-                                  "
-                              >
+                              <div className="rounded-2xl rounded-tr-md border border-white/[0.08] bg-white/[0.07] px-4 py-3 shadow-sm">
                                 <p className="whitespace-pre-wrap text-sm leading-6 text-neutral-200">
                                   {message.content}
                                 </p>
                               </div>
 
-                              <div
-                                className="
-                                    mt-1
-                                    flex
-                                    h-8
-                                    w-8
-                                    shrink-0
-                                    items-center
-                                    justify-center
-                                    rounded-full
-                                    border
-                                    border-white/[0.08]
-                                    bg-white/[0.04]
-                                  "
-                              >
+                              <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.04]">
                                 <FiUser className="text-xs text-neutral-500" />
                               </div>
                             </div>
                           </div>
                         ) : (
-                          /* ==================================================
-                               ASSISTANT MESSAGE
-                            ================================================== */
-
+                          /* ASSISTANT */
                           <div className="w-full">
                             <div className="flex items-start gap-3 sm:gap-4">
-                              {/* AI Icon */}
-                              <div
-                                className="
-                                    flex
-                                    h-8
-                                    w-8
-                                    shrink-0
-                                    items-center
-                                    justify-center
-                                    rounded-xl
-                                    border
-                                    border-white/[0.08]
-                                    bg-white/[0.04]
-                                  "
-                              >
+                              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.04]">
                                 <span className="text-[10px] font-semibold text-neutral-300">
                                   AI
                                 </span>
                               </div>
 
-                              {/* Assistant Content */}
                               <div className="min-w-0 flex-1">
                                 <p className="mb-2 text-xs font-medium text-neutral-500">
                                   Google Drive RAG
                                 </p>
 
-                                {/* Answer */}
                                 {message.content ? (
                                   <div className="whitespace-pre-wrap text-sm leading-7 text-neutral-300">
                                     {message.content}
@@ -993,28 +1015,10 @@ function Chat({ user, onSyncAnotherFolder }) {
                                           (source, sourceIndex) => (
                                             <div
                                               key={sourceIndex}
-                                              className="
-                                                  rounded-xl
-                                                  border
-                                                  border-white/[0.06]
-                                                  bg-white/[0.02]
-                                                  px-4
-                                                  py-3
-                                                "
+                                              className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3"
                                             >
                                               <div className="flex items-start gap-3">
-                                                <div
-                                                  className="
-                                                      flex
-                                                      h-8
-                                                      w-8
-                                                      shrink-0
-                                                      items-center
-                                                      justify-center
-                                                      rounded-lg
-                                                      bg-white/[0.04]
-                                                    "
-                                                >
+                                                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/[0.04]">
                                                   <FiFileText className="text-xs text-neutral-500" />
                                                 </div>
 
@@ -1048,7 +1052,6 @@ function Chat({ user, onSyncAnotherFolder }) {
                     );
                   })}
 
-                  {/* Invisible bottom anchor */}
                   <div ref={messagesEndRef} className="h-1" />
                 </div>
               )}
@@ -1067,11 +1070,9 @@ function Chat({ user, onSyncAnotherFolder }) {
           ================================================== */}
 
           <div className="pointer-events-none absolute bottom-0 left-0 right-0 z-40">
-            {/* Fade */}
             <div className="pointer-events-none absolute inset-x-0 bottom-0 h-48 bg-gradient-to-t from-[#0d0d0d] via-[#0d0d0d]/95 to-transparent" />
 
             <div className="relative mx-auto w-full max-w-3xl px-4 pb-5 sm:px-6">
-              {/* Composer */}
               <div className="pointer-events-auto rounded-2xl border border-white/[0.09] bg-[#151515]/95 p-2 shadow-2xl backdrop-blur-xl">
                 <textarea
                   value={question}
@@ -1098,11 +1099,9 @@ function Chat({ user, onSyncAnotherFolder }) {
                 />
 
                 <div className="flex items-center justify-between px-2 pb-1">
-                  <div className="flex items-center gap-2">
-                    <div className="hidden items-center gap-1.5 text-[10px] text-neutral-700 sm:flex">
-                      <FiShield />
-                      Drive documents
-                    </div>
+                  <div className="hidden items-center gap-1.5 text-[10px] text-neutral-700 sm:flex">
+                    <FiShield />
+                    Drive documents
                   </div>
 
                   <button
