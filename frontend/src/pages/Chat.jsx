@@ -550,43 +550,13 @@ function Chat({ user, onSyncAnotherFolder }) {
   // ==================================================
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-[#050505] text-white">
-      {/* ==================================================
-          SCOPED STYLES (scrollbar + ambient motion)
-      ================================================== */}
-
-      <style>{`
-        .aurora-drift {
-          animation: aurora-drift 14s ease-in-out infinite;
-        }
-        @keyframes aurora-drift {
-          0%, 100% { transform: translate(0px, 0px) scale(1); opacity: 0.55; }
-          50% { transform: translate(20px, -15px) scale(1.08); opacity: 0.85; }
-        }
-        @media (prefers-reduced-motion: reduce) {
-          .aurora-drift { animation: none; }
-        }
-        .thin-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
-        .thin-scroll::-webkit-scrollbar-track { background: transparent; }
-        .thin-scroll::-webkit-scrollbar-thumb {
-          background: linear-gradient(180deg, rgba(139,92,246,0.35), rgba(34,211,238,0.35));
-          border-radius: 999px;
-        }
-        .thin-scroll::-webkit-scrollbar-thumb:hover {
-          background: linear-gradient(180deg, rgba(139,92,246,0.55), rgba(34,211,238,0.55));
-        }
-        .focus-glow:focus-visible {
-          outline: none;
-          box-shadow: 0 0 0 2px #050505, 0 0 0 4px rgba(139,92,246,0.6);
-        }
-      `}</style>
-
+    <div className="relative min-h-screen overflow-hidden bg-[#0d0d0d] text-white">
       {/* ==================================================
           BACKGROUND
       ================================================== */}
 
       <div
-        className="pointer-events-none fixed inset-0 opacity-[0.03]"
+        className="pointer-events-none fixed inset-0 opacity-[0.035]"
         style={{
           backgroundImage: `
             linear-gradient(
@@ -604,24 +574,7 @@ function Chat({ user, onSyncAnotherFolder }) {
         }}
       />
 
-      {/* Twin aurora glow — signature ambient element, very low intensity */}
-      <div
-        aria-hidden="true"
-        className="aurora-drift pointer-events-none fixed left-[10%] top-[-320px] h-[600px] w-[600px] rounded-full blur-[120px]"
-        style={{
-          background:
-            "radial-gradient(circle, rgba(139,92,246,0.16), transparent 70%)",
-        }}
-      />
-      <div
-        aria-hidden="true"
-        className="aurora-drift pointer-events-none fixed right-[8%] top-[-260px] h-[520px] w-[520px] rounded-full blur-[120px]"
-        style={{
-          background:
-            "radial-gradient(circle, rgba(34,211,238,0.12), transparent 70%)",
-          animationDelay: "3s",
-        }}
-      />
+      <div className="pointer-events-none fixed left-1/2 top-[-400px] h-[700px] w-[700px] -translate-x-1/2 rounded-full bg-white/[0.025] blur-3xl" />
 
       {/* ==================================================
           NAVBAR
@@ -638,10 +591,10 @@ function Chat({ user, onSyncAnotherFolder }) {
             SIDEBAR
         ================================================== */}
 
-        <aside className="hidden w-72 shrink-0 border-r border-white/[0.06] bg-white/[0.02] backdrop-blur-2xl lg:flex lg:flex-col">
+        <aside className="hidden w-72 shrink-0 border-r border-white/[0.06] bg-[#101010]/80 backdrop-blur-xl lg:flex lg:flex-col">
           {/* Sidebar Header */}
           <div className="flex items-center justify-between border-b border-white/[0.06] p-4">
-            <p className="text-sm font-medium tracking-wide text-neutral-300">
+            <p className="text-sm font-medium text-neutral-300">
               Conversations
             </p>
 
@@ -649,7 +602,6 @@ function Chat({ user, onSyncAnotherFolder }) {
               onClick={createNewChat}
               disabled={loading || requestInFlightRef.current}
               className="
-                focus-glow
                 flex
                 h-8
                 w-8
@@ -661,7 +613,6 @@ function Chat({ user, onSyncAnotherFolder }) {
                 bg-white/[0.04]
                 text-neutral-400
                 transition
-                hover:border-violet-400/30
                 hover:bg-white/[0.08]
                 hover:text-white
                 disabled:cursor-not-allowed
@@ -674,7 +625,7 @@ function Chat({ user, onSyncAnotherFolder }) {
           </div>
 
           {/* Conversations */}
-          <div className="thin-scroll flex-1 overflow-y-auto p-3">
+          <div className="flex-1 overflow-y-auto p-3">
             {loadingConversations ? (
               <div className="px-2 py-4 text-xs text-neutral-600">
                 Loading conversations...
@@ -693,49 +644,35 @@ function Chat({ user, onSyncAnotherFolder }) {
                       key={conversation.id}
                       className={`
                           group
-                          relative
                           flex
                           items-center
                           gap-1
-                          overflow-hidden
                           rounded-xl
                           border
                           transition
                           ${
                             active
-                              ? "border-white/[0.09] bg-gradient-to-r from-violet-500/[0.08] via-white/[0.03] to-transparent"
+                              ? "border-white/[0.09] bg-white/[0.06]"
                               : "border-transparent hover:bg-white/[0.035]"
                           }
                         `}
                     >
-                      {active && (
-                        <span
-                          aria-hidden="true"
-                          className="absolute inset-y-1.5 left-0 w-[3px] rounded-full bg-gradient-to-b from-violet-400 to-cyan-400"
-                        />
-                      )}
-
                       <button
                         onClick={() => loadConversation(conversation.id)}
                         disabled={loading}
                         className="
-                            focus-glow
                             min-w-0
                             flex-1
-                            px-3.5
+                            px-3
                             py-2.5
                             text-left
                             disabled:opacity-50
                           "
                       >
                         <div className="flex items-center gap-2">
-                          <FiMessageSquare
-                            className={`shrink-0 text-xs ${active ? "text-violet-300" : "text-neutral-600"}`}
-                          />
+                          <FiMessageSquare className="shrink-0 text-xs text-neutral-600" />
 
-                          <span
-                            className={`truncate text-xs ${active ? "text-neutral-100" : "text-neutral-300"}`}
-                          >
+                          <span className="truncate text-xs text-neutral-300">
                             {conversation.title}
                           </span>
                         </div>
@@ -745,7 +682,6 @@ function Chat({ user, onSyncAnotherFolder }) {
                         onClick={() => renameConversation(conversation)}
                         disabled={loading}
                         className="
-                            focus-glow
                             hidden
                             h-7
                             w-7
@@ -768,7 +704,6 @@ function Chat({ user, onSyncAnotherFolder }) {
                         onClick={() => deleteConversation(conversation.id)}
                         disabled={loading}
                         className="
-                            focus-glow
                             mr-1
                             hidden
                             h-7
@@ -800,7 +735,6 @@ function Chat({ user, onSyncAnotherFolder }) {
               onClick={createNewChat}
               disabled={loading}
               className="
-                focus-glow
                 flex
                 w-full
                 items-center
@@ -815,7 +749,6 @@ function Chat({ user, onSyncAnotherFolder }) {
                 text-xs
                 text-neutral-400
                 transition
-                hover:border-violet-400/20
                 hover:bg-white/[0.06]
                 hover:text-white
                 disabled:opacity-50
@@ -839,7 +772,6 @@ function Chat({ user, onSyncAnotherFolder }) {
           <div
             ref={messagesContainerRef}
             className="
-              thin-scroll
               absolute
               inset-0
               overflow-y-auto
@@ -858,15 +790,11 @@ function Chat({ user, onSyncAnotherFolder }) {
               {messages.length === 0 && !loading && !error ? (
                 <div className="flex min-h-[calc(100vh-260px)] items-center justify-center">
                   <div className="w-full max-w-2xl text-center">
-                    <div className="relative mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl border border-white/[0.09] bg-white/[0.04]">
-                      <div
-                        aria-hidden="true"
-                        className="absolute inset-0 rounded-2xl bg-gradient-to-br from-violet-500/20 to-cyan-400/10 blur-md"
-                      />
-                      <FiFileText className="relative text-xl text-neutral-200" />
+                    <div className="mx-auto mb-6 flex h-14 w-14 items-center justify-center rounded-2xl border border-white/[0.09] bg-white/[0.04]">
+                      <FiFileText className="text-xl text-neutral-300" />
                     </div>
 
-                    <h1 className="bg-gradient-to-r from-white via-white to-neutral-400 bg-clip-text text-3xl font-semibold tracking-tight text-transparent">
+                    <h1 className="text-3xl font-semibold tracking-tight">
                       Ask your documents
                     </h1>
 
@@ -882,8 +810,6 @@ function Chat({ user, onSyncAnotherFolder }) {
                         }
                         disabled={loading}
                         className="
-                          focus-glow
-                          group
                           rounded-xl
                           border
                           border-white/[0.07]
@@ -891,12 +817,12 @@ function Chat({ user, onSyncAnotherFolder }) {
                           p-4
                           text-left
                           transition
-                          hover:border-violet-400/25
-                          hover:bg-white/[0.045]
+                          hover:border-white/[0.14]
+                          hover:bg-white/[0.04]
                           disabled:opacity-50
                         "
                       >
-                        <p className="text-xs font-medium text-neutral-300 group-hover:text-white">
+                        <p className="text-xs font-medium text-neutral-300">
                           Document overview
                         </p>
 
@@ -911,8 +837,6 @@ function Chat({ user, onSyncAnotherFolder }) {
                         }
                         disabled={loading}
                         className="
-                          focus-glow
-                          group
                           rounded-xl
                           border
                           border-white/[0.07]
@@ -920,12 +844,12 @@ function Chat({ user, onSyncAnotherFolder }) {
                           p-4
                           text-left
                           transition
-                          hover:border-cyan-400/25
-                          hover:bg-white/[0.045]
+                          hover:border-white/[0.14]
+                          hover:bg-white/[0.04]
                           disabled:opacity-50
                         "
                       >
-                        <p className="text-xs font-medium text-neutral-300 group-hover:text-white">
+                        <p className="text-xs font-medium text-neutral-300">
                           Summarize documents
                         </p>
 
@@ -969,12 +893,11 @@ function Chat({ user, onSyncAnotherFolder }) {
                                     rounded-2xl
                                     rounded-tr-md
                                     border
-                                    border-white/[0.09]
+                                    border-white/[0.08]
                                     bg-white/[0.07]
                                     px-4
                                     py-3
-                                    shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset]
-                                    backdrop-blur-sm
+                                    shadow-sm
                                   "
                               >
                                 <p className="whitespace-pre-wrap text-sm leading-6 text-neutral-200">
@@ -1011,31 +934,25 @@ function Chat({ user, onSyncAnotherFolder }) {
                               {/* AI Icon */}
                               <div
                                 className="
-                                    relative
                                     flex
                                     h-8
                                     w-8
                                     shrink-0
                                     items-center
                                     justify-center
-                                    overflow-hidden
                                     rounded-xl
                                     border
                                     border-white/[0.08]
                                     bg-white/[0.04]
                                   "
                               >
-                                <div
-                                  aria-hidden="true"
-                                  className="absolute inset-0 bg-gradient-to-br from-violet-500/25 to-cyan-400/15"
-                                />
-                                <span className="relative text-[10px] font-semibold text-neutral-100">
+                                <span className="text-[10px] font-semibold text-neutral-300">
                                   AI
                                 </span>
                               </div>
 
                               {/* Assistant Content */}
-                              <div className="min-w-0 flex-1 border-l border-white/[0.06] pl-4 sm:pl-5">
+                              <div className="min-w-0 flex-1">
                                 <p className="mb-2 text-xs font-medium text-neutral-500">
                                   Google Drive RAG
                                 </p>
@@ -1047,11 +964,11 @@ function Chat({ user, onSyncAnotherFolder }) {
                                   </div>
                                 ) : isGenerating ? (
                                   <div className="flex items-center gap-2 py-2">
-                                    <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-violet-400" />
+                                    <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-neutral-500" />
 
-                                    <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-fuchsia-400 [animation-delay:150ms]" />
+                                    <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-neutral-500 [animation-delay:150ms]" />
 
-                                    <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-cyan-400 [animation-delay:300ms]" />
+                                    <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-neutral-500 [animation-delay:300ms]" />
 
                                     <span className="ml-2 text-xs text-neutral-600">
                                       Searching your documents...
@@ -1077,16 +994,12 @@ function Chat({ user, onSyncAnotherFolder }) {
                                             <div
                                               key={sourceIndex}
                                               className="
-                                                  group
                                                   rounded-xl
                                                   border
                                                   border-white/[0.06]
                                                   bg-white/[0.02]
                                                   px-4
                                                   py-3
-                                                  transition
-                                                  hover:border-violet-400/20
-                                                  hover:bg-white/[0.035]
                                                 "
                                             >
                                               <div className="flex items-start gap-3">
@@ -1100,13 +1013,9 @@ function Chat({ user, onSyncAnotherFolder }) {
                                                       justify-center
                                                       rounded-lg
                                                       bg-white/[0.04]
-                                                      transition
-                                                      group-hover:bg-gradient-to-br
-                                                      group-hover:from-violet-500/20
-                                                      group-hover:to-cyan-400/10
                                                     "
                                                 >
-                                                  <FiFileText className="text-xs text-neutral-500 group-hover:text-neutral-200" />
+                                                  <FiFileText className="text-xs text-neutral-500" />
                                                 </div>
 
                                                 <div className="min-w-0">
@@ -1146,7 +1055,7 @@ function Chat({ user, onSyncAnotherFolder }) {
 
               {/* Error */}
               {error && (
-                <div className="mt-8 rounded-xl border border-red-500/15 bg-red-500/[0.05] px-4 py-3 text-xs text-red-400">
+                <div className="mt-8 rounded-xl border border-red-500/10 bg-red-500/[0.04] px-4 py-3 text-xs text-red-400">
                   {error}
                 </div>
               )}
@@ -1159,16 +1068,11 @@ function Chat({ user, onSyncAnotherFolder }) {
 
           <div className="pointer-events-none absolute bottom-0 left-0 right-0 z-40">
             {/* Fade */}
-            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-48 bg-gradient-to-t from-[#050505] via-[#050505]/95 to-transparent" />
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-48 bg-gradient-to-t from-[#0d0d0d] via-[#0d0d0d]/95 to-transparent" />
 
             <div className="relative mx-auto w-full max-w-3xl px-4 pb-5 sm:px-6">
               {/* Composer */}
-              <div className="pointer-events-auto relative rounded-2xl border border-white/[0.09] bg-[#0c0c0c]/90 p-2 shadow-2xl backdrop-blur-2xl focus-within:border-violet-400/30">
-                <div
-                  aria-hidden="true"
-                  className="pointer-events-none absolute -inset-px -z-10 rounded-2xl bg-gradient-to-r from-violet-500/[0.06] via-transparent to-cyan-400/[0.06]"
-                />
-
+              <div className="pointer-events-auto rounded-2xl border border-white/[0.09] bg-[#151515]/95 p-2 shadow-2xl backdrop-blur-xl">
                 <textarea
                   value={question}
                   onChange={(event) => setQuestion(event.target.value)}
@@ -1177,12 +1081,10 @@ function Chat({ user, onSyncAnotherFolder }) {
                   rows={1}
                   disabled={loading}
                   className="
-                    focus-glow
                     max-h-40
                     min-h-[52px]
                     w-full
                     resize-none
-                    rounded-xl
                     bg-transparent
                     px-4
                     py-3
@@ -1207,25 +1109,19 @@ function Chat({ user, onSyncAnotherFolder }) {
                     onClick={askQuestion}
                     disabled={loading || !question.trim()}
                     className="
-                      focus-glow
                       flex
                       h-9
                       w-9
                       items-center
                       justify-center
                       rounded-xl
-                      bg-gradient-to-br
-                      from-violet-500
-                      to-cyan-400
+                      bg-white
                       text-black
-                      shadow-[0_0_16px_rgba(139,92,246,0.35)]
                       transition
-                      hover:shadow-[0_0_20px_rgba(139,92,246,0.5)]
+                      hover:bg-neutral-200
                       disabled:cursor-not-allowed
                       disabled:bg-white/[0.08]
-                      disabled:bg-none
                       disabled:text-neutral-600
-                      disabled:shadow-none
                     "
                   >
                     <FiArrowUp className="text-sm" />
@@ -1250,7 +1146,6 @@ function Chat({ user, onSyncAnotherFolder }) {
         onClick={createNewChat}
         disabled={loading}
         className="
-          focus-glow
           fixed
           bottom-24
           right-5
@@ -1263,9 +1158,9 @@ function Chat({ user, onSyncAnotherFolder }) {
           rounded-full
           border
           border-white/[0.08]
-          bg-[#0c0c0c]
+          bg-[#151515]
           text-neutral-300
-          shadow-[0_0_18px_rgba(139,92,246,0.25)]
+          shadow-xl
           lg:hidden
         "
         title="New chat"
