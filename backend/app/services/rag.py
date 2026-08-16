@@ -169,11 +169,10 @@ class RAGService:
         # --------------------------------------------------
 
         regulation_numbers = re.findall(
-            r"\b(?:regulation|rule)\s*"
-            r"(\d+)",
+            r"\b(?:regulation|rule)\s*(\d+)",
             question,
             flags=re.IGNORECASE
-        )
+)
 
         if len(
             regulation_numbers

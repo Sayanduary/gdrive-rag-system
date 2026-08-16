@@ -48,8 +48,37 @@ class VectorStore:
         if not texts:
             return
 
+        if len(texts) != len(metadatas):
+            raise ValueError(
+                "texts and metadatas length mismatch."
+            )
+
+        if len(texts) != len(ids):
+            raise ValueError(
+                "texts and ids length mismatch."
+            )
+
+        # ----------------------------------------------
+        # Security check:
+        # Every chunk must have a tenant identity.
+        # ----------------------------------------------
+
+        for metadata in metadatas:
+
+            if not metadata.get("user_id"):
+                raise ValueError(
+                    "Every document chunk must contain user_id."
+                )
+
+            if not metadata.get("folder_id"):
+                raise ValueError(
+                    "Every document chunk must contain folder_id."
+                )
+
         embeddings = list(
-            self.embedding_model.embed(texts)
+            self.embedding_model.embed(
+                texts
+            )
         )
 
         embeddings = [
@@ -61,8 +90,43 @@ class VectorStore:
             ids=ids,
             documents=texts,
             embeddings=embeddings,
-            metadatas=metadatas
+            metadatas=metadatas,
         )
+
+    # ==================================================
+    # BUILD REQUIRED TENANT FILTER
+    # ==================================================
+
+    def _tenant_filter(
+        self,
+        user_id: str,
+        folder_id: str | None = None
+    ) -> dict:
+
+        if not user_id:
+            raise ValueError(
+                "user_id is required for Chroma access."
+            )
+
+        filters = [
+            {
+                "user_id": user_id
+            }
+        ]
+
+        if folder_id:
+            filters.append(
+                {
+                    "folder_id": folder_id
+                }
+            )
+
+        if len(filters) == 1:
+            return filters[0]
+
+        return {
+            "$and": filters
+        }
 
     # ==================================================
     # SEARCH
@@ -71,73 +135,55 @@ class VectorStore:
     def search(
         self,
         query: str,
-        top_k: int = 3,
+        top_k: int = 5,
         user_id: str | None = None,
         folder_id: str | None = None
     ):
 
+        if not user_id:
+            raise ValueError(
+                "user_id is required for Chroma search."
+            )
+
+        if not query or not query.strip():
+            return {
+                "ids": [[]],
+                "documents": [[]],
+                "metadatas": [[]],
+                "distances": [[]],
+            }
+
         if top_k <= 0:
-            top_k = 3
+            top_k = 5
+
+        where = self._tenant_filter(
+            user_id=user_id,
+            folder_id=folder_id
+        )
 
         # ----------------------------------------------
-        # Build user/folder filter
+        # Count only current user's scope
         # ----------------------------------------------
 
-        where = None
+        scoped_documents = self.collection.get(
+            where=where,
+            include=[]
+        )
 
-        if user_id and folder_id:
-
-            where = {
-                "$and": [
-                    {
-                        "user_id": user_id
-                    },
-                    {
-                        "folder_id": folder_id
-                    }
-                ]
-            }
-
-        elif user_id:
-
-            where = {
-                "user_id": user_id
-            }
-
-        elif folder_id:
-
-            where = {
-                "folder_id": folder_id
-            }
-
-        # ----------------------------------------------
-        # Count documents in current scope
-        # ----------------------------------------------
-
-        if where:
-
-            scoped_documents = self.collection.get(
-                where=where,
-                include=[]
+        scoped_count = len(
+            scoped_documents.get(
+                "ids",
+                []
             )
-
-            scoped_count = len(
-                scoped_documents.get(
-                    "ids",
-                    []
-                )
-            )
-
-        else:
-
-            scoped_count = self.collection.count()
+        )
 
         if scoped_count == 0:
 
             return {
+                "ids": [[]],
                 "documents": [[]],
                 "metadatas": [[]],
-                "distances": [[]]
+                "distances": [[]],
             }
 
         top_k = min(
@@ -146,7 +192,7 @@ class VectorStore:
         )
 
         # ----------------------------------------------
-        # Query embedding
+        # Embed query
         # ----------------------------------------------
 
         query_embedding = list(
@@ -156,10 +202,10 @@ class VectorStore:
         )[0]
 
         # ----------------------------------------------
-        # Vector search
+        # Chroma search
         # ----------------------------------------------
 
-        results = self.collection.query(
+        return self.collection.query(
             query_embeddings=[
                 query_embedding.tolist()
             ],
@@ -172,60 +218,35 @@ class VectorStore:
             ]
         )
 
-        return results
-
     # ==================================================
     # COUNT
     # ==================================================
 
     def count(
         self,
-        user_id: str | None = None,
-        folder_id: str | None = None
+        user_id: str
     ) -> int:
 
-        where = None
-
-        if user_id and folder_id:
-
-            where = {
-                "$and": [
-                    {
-                        "user_id": user_id
-                    },
-                    {
-                        "folder_id": folder_id
-                    }
-                ]
-            }
-
-        elif user_id:
-
-            where = {
-                "user_id": user_id
-            }
-
-        elif folder_id:
-
-            where = {
-                "folder_id": folder_id
-            }
-
-        if where:
-
-            results = self.collection.get(
-                where=where,
-                include=[]
+        if not user_id:
+            raise ValueError(
+                "user_id is required for count."
             )
 
-            return len(
-                results.get(
-                    "ids",
-                    []
-                )
-            )
+        where = self._tenant_filter(
+            user_id=user_id
+        )
 
-        return self.collection.count()
+        results = self.collection.get(
+            where=where,
+            include=[]
+        )
+
+        return len(
+            results.get(
+                "ids",
+                []
+            )
+        )
 
     # ==================================================
     # GET FILE CHUNKS
@@ -238,27 +259,32 @@ class VectorStore:
         folder_id: str
     ):
 
-        results = self.collection.get(
-            where={
-                "$and": [
-                    {
-                        "file_id": file_id
-                    },
-                    {
-                        "user_id": user_id
-                    },
-                    {
-                        "folder_id": folder_id
-                    }
-                ]
-            },
+        if not user_id:
+            raise ValueError(
+                "user_id is required."
+            )
+
+        where = {
+            "$and": [
+                {
+                    "file_id": file_id
+                },
+                {
+                    "user_id": user_id
+                },
+                {
+                    "folder_id": folder_id
+                }
+            ]
+        }
+
+        return self.collection.get(
+            where=where,
             include=[
                 "documents",
                 "metadatas"
             ]
         )
-
-        return results
 
     # ==================================================
     # CHECK FILE EXISTS
@@ -289,12 +315,12 @@ class VectorStore:
             include=[]
         )
 
-        return len(
+        return bool(
             results.get(
                 "ids",
                 []
             )
-        ) > 0
+        )
 
     # ==================================================
     # GET MODIFICATION TIME
@@ -410,12 +436,14 @@ class VectorStore:
                 continue
 
             indexed_files[file_id] = {
-                "file_name": metadata.get(
-                    "file_name"
-                ),
-                "modified_time": metadata.get(
-                    "modified_time"
-                ),
+                "file_name":
+                    metadata.get(
+                        "file_name"
+                    ),
+                "modified_time":
+                    metadata.get(
+                        "modified_time"
+                    ),
             }
 
         return indexed_files
