@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+*.pyc
+
+.env
+
+data/chroma_db/
+
+credentials/
+*.json
+
+.pytest_cache/
+credentials/
