@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   FiArrowUp,
   FiEdit2,
@@ -16,6 +17,7 @@ import Navbar from "../components/Navbar";
 const ACTIVE_CHAT_KEY = "gdrive_rag_active_conversation";
 
 function Chat({ user, onSyncAnotherFolder }) {
+  const navigate = useNavigate();
   // ==================================================
   // CHAT STATE
   // ==================================================
@@ -67,53 +69,59 @@ function Chat({ user, onSyncAnotherFolder }) {
     });
   }, [messages, loading]);
 
+
+
   // ==================================================
   // INITIAL LOAD
   // ==================================================
 
   useEffect(() => {
-    loadConversations();
-  }, []);
+    let ignore = false;
 
-  // ==================================================
-  // LOAD CONVERSATIONS
-  // ==================================================
+    async function initialLoad() {
+      try {
+        setLoadingConversations(true);
+        setError("");
 
-  async function loadConversations() {
-    try {
-      setLoadingConversations(true);
-      setError("");
+        const response = await api.get("/api/conversations");
+        if (ignore) return;
 
-      const response = await api.get("/api/conversations");
+        const items = response.data.conversations || [];
+        setConversations(items);
 
-      const items = response.data.conversations || [];
+        if (items.length === 0) {
+          setActiveConversationId(null);
+          setMessages([]);
+          localStorage.removeItem(ACTIVE_CHAT_KEY);
+          return;
+        }
 
-      setConversations(items);
+        const savedId = localStorage.getItem(ACTIVE_CHAT_KEY);
+        const savedConversation = items.find(
+          (item) => String(item.id) === savedId,
+        );
 
-      if (items.length === 0) {
-        setActiveConversationId(null);
-        setMessages([]);
-
-        localStorage.removeItem(ACTIVE_CHAT_KEY);
-
-        return;
+        const conversationToOpen = savedConversation || items[0];
+        await loadConversation(conversationToOpen.id);
+      } catch (error) {
+        if (!ignore) {
+          setError(
+            error.response?.data?.detail || "Failed to load conversations.",
+          );
+        }
+      } finally {
+        if (!ignore) {
+          setLoadingConversations(false);
+        }
       }
-
-      const savedId = localStorage.getItem(ACTIVE_CHAT_KEY);
-
-      const savedConversation = items.find(
-        (item) => String(item.id) === savedId,
-      );
-
-      const conversationToOpen = savedConversation || items[0];
-
-      await loadConversation(conversationToOpen.id);
-    } catch (error) {
-      setError(error.response?.data?.detail || "Failed to load conversations.");
-    } finally {
-      setLoadingConversations(false);
     }
-  }
+
+    initialLoad();
+
+    return () => {
+      ignore = true;
+    };
+  }, []);
 
   // ==================================================
   // LOAD ONE CONVERSATION
@@ -616,6 +624,15 @@ function Chat({ user, onSyncAnotherFolder }) {
     }
   }
 
+  function handleSyncAnotherFolder() {
+    if (typeof onSyncAnotherFolder === "function") {
+      onSyncAnotherFolder();
+    } else {
+      localStorage.removeItem("gdrive_rag_session");
+    }
+    navigate("/analyze");
+  }
+
   // ==================================================
   // RENDER
   // ==================================================
@@ -650,7 +667,11 @@ function Chat({ user, onSyncAnotherFolder }) {
           NAVBAR
       ================================================== */}
 
-      <Navbar user={user} onSyncAnotherFolder={onSyncAnotherFolder} />
+      <Navbar
+        user={user}
+        showSync={true}
+        onSyncAnotherFolder={handleSyncAnotherFolder}
+      />
 
       {/* ==================================================
           APP LAYOUT

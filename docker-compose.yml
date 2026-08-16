@@ -1,4 +1,15 @@
 services:
+  lmstudio:
+    build:
+      context: ./lmstudio
+      dockerfile: Dockerfile
+    container_name: gdrive-rag-lmstudio
+    restart: unless-stopped
+    ports:
+      - "1234:1234"
+    volumes:
+      - lmstudio-models:/root/.cache/lm-studio
+
   backend:
     build:
       context: ./backend
@@ -13,7 +24,10 @@ services:
       - ./backend/.env
     environment:
       - CHROMA_DB_PATH=/app/data/chroma_db
+      - LM_STUDIO_BASE_URL=${LM_STUDIO_BASE_URL:-http://lmstudio:1234}
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+    depends_on:
+      - lmstudio
 
   frontend:
     build:
@@ -25,3 +39,6 @@ services:
       - "5173:80"
     depends_on:
       - backend
+
+volumes:
+  lmstudio-models:
