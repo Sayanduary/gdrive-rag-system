@@ -30,7 +30,7 @@ function getActiveChatKey(user) {
 // CHAT COMPONENT
 // ==================================================
 
-function Chat({ user, onSyncAnotherFolder }) {
+function Chat({ user, onSyncAnotherFolder, onLogout }) {
   const navigate = useNavigate();
 
   // IMPORTANT:

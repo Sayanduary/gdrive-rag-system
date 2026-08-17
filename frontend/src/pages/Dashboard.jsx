@@ -16,7 +16,7 @@ import {
 import api from "../services/api";
 import Navbar from "../components/Navbar";
 
-function Dashboard({ user, onChat }) {
+function Dashboard({ user, onLogout }) {
   const [folders, setFolders] = useState([]);
 
   const [selectedFolder, setSelectedFolder] = useState(null);
