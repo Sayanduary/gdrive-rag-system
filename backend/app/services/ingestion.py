@@ -216,9 +216,10 @@ class IngestionService:
                     "Downloading file..."
                 )
 
-                file_bytes = download_file(
+                file_bytes, effective_mime = download_file(
                     self.drive_service,
                     file_id,
+                    mime_type=mime_type,
                 )
 
                 print(
@@ -233,7 +234,7 @@ class IngestionService:
                 text = parse_file(
                     file_bytes=file_bytes,
                     file_name=file_name,
-                    mime_type=mime_type,
+                    mime_type=effective_mime,
                 )
 
                 print(

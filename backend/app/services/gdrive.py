@@ -57,7 +57,7 @@ def list_folder_items(
 ):
     """
     Return all immediate children of a
-    Google Drive folder.
+    Google Drive folder (including Shared Drives).
     """
 
     items = []
@@ -72,6 +72,8 @@ def list_folder_items(
                 "in parents and trashed = false"
             ),
             spaces="drive",
+            supportsAllDrives=True,
+            includeItemsFromAllDrives=True,
             fields=(
                 "nextPageToken,"
                 "files("
@@ -177,16 +179,47 @@ def recursive_list_files(
 
 def download_file(
     service,
-    file_id: str
-) -> bytes:
+    file_id: str,
+    mime_type: str = "",
+) -> tuple[bytes, str]:
     """
-    Download a Google Drive file and return
-    its contents as bytes.
+    Download a Google Drive file or export Google Workspace docs/slides.
+
+    Returns (file_bytes, effective_mime_type).
     """
 
-    request = service.files().get_media(
-        fileId=file_id
-    )
+    effective_mime = mime_type
+
+    # Export Google Docs as PDF
+    if mime_type == "application/vnd.google-apps.document":
+        request = service.files().export_media(
+            fileId=file_id,
+            mimeType="application/pdf"
+        )
+        effective_mime = "application/pdf"
+
+    # Export Google Slides as PDF
+    elif mime_type == "application/vnd.google-apps.presentation":
+        request = service.files().export_media(
+            fileId=file_id,
+            mimeType="application/pdf"
+        )
+        effective_mime = "application/pdf"
+
+    # Export Google Sheets as CSV
+    elif mime_type == "application/vnd.google-apps.spreadsheet":
+        request = service.files().export_media(
+            fileId=file_id,
+            mimeType="text/csv"
+        )
+        effective_mime = "text/csv"
+
+    # Standard binary file download
+    else:
+        request = service.files().get_media(
+            fileId=file_id,
+            supportsAllDrives=True
+        )
 
     file_buffer = io.BytesIO()
 
@@ -211,4 +244,4 @@ def download_file(
                 f"{status.progress() * 100:.1f}%"
             )
 
-    return file_buffer.getvalue()
+    return file_buffer.getvalue(), effective_mime

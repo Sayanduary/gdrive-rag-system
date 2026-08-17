@@ -47,7 +47,14 @@ function Analyze({ user, onAnalysisComplete, onLogout }) {
       // Navigate to chat after successful analysis
       navigate("/dashboard");
     } catch (err) {
-      setError(err.response?.data?.detail || "Failed to analyze folder.");
+      const detail = err.response?.data?.detail;
+      const message =
+        typeof detail === "string"
+          ? detail
+          : detail
+            ? JSON.stringify(detail)
+            : "Failed to analyze folder.";
+      setError(message);
     } finally {
       setAnalyzing(false);
     }
