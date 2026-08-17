@@ -21,14 +21,13 @@ class Settings(BaseSettings):
         "https://gdrive-rag-system-h5sf.onrender.com/api/auth/google/callback"
     )
 
-
-    FRONTEND_URL: str = "https://gdrive-rag-system.vercel.app"
-
+    FRONTEND_URL: str = (
+        "https://gdrive-rag-system.vercel.app"
+    )
 
     SESSION_COOKIE_SAMESITE: str = "none"
 
     SESSION_COOKIE_SECURE: bool = True
-
 
     # ==================================================
     # RETRIEVAL
@@ -68,7 +67,7 @@ class Settings(BaseSettings):
 
     # Normal RAG / chat generation
     GROQ_LLM_MODEL: str = (
-        "llama-3.1-8b-instant"
+        "groq/compound"
     )
 
     # Scanned PDF / image OCR
