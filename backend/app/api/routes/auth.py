@@ -424,7 +424,7 @@ def google_callback(
     )
 
     print(
-        "REDIRECTING TO:"
+        "REDIRECTING TO:",
         frontend_url,
     )
 
