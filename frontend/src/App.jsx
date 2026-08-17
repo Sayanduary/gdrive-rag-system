@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 
 import api from "./services/api";
-
 import Login from "./pages/Login";
 import Analyze from "./pages/Analyze";
 import Chat from "./pages/Chat";
@@ -14,13 +13,13 @@ const ACTIVE_CHAT_KEY = "gdrive_rag_active_conversation";
 // LOADING SCREEN
 // ==================================================
 
-function LoadingScreen({ text = "Loading..." }) {
+function LoadingScreen() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-[#0d0d0d] text-white">
       <div className="flex flex-col items-center gap-4">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/10 border-t-white" />
 
-        <p className="text-sm text-neutral-500">{text}</p>
+        <p className="text-sm text-neutral-500">Checking authentication...</p>
       </div>
     </div>
   );
@@ -32,7 +31,7 @@ function LoadingScreen({ text = "Loading..." }) {
 
 function ProtectedRoute({ user, checkingAuth, children }) {
   if (checkingAuth) {
-    return <LoadingScreen text="Checking authentication..." />;
+    return <LoadingScreen />;
   }
 
   if (!user) {
@@ -43,18 +42,45 @@ function ProtectedRoute({ user, checkingAuth, children }) {
 }
 
 // ==================================================
+// CHECK SAVED DRIVE SESSION
+// ==================================================
+
+function getSavedAnalysis() {
+  try {
+    const savedSession = localStorage.getItem(STORAGE_KEY);
+
+    if (!savedSession) {
+      return null;
+    }
+
+    const parsedSession = JSON.parse(savedSession);
+
+    if (parsedSession?.folderUrl && parsedSession?.analysis) {
+      return parsedSession;
+    }
+
+    return null;
+  } catch (error) {
+    console.error("Failed to read saved Drive session:", error);
+
+    localStorage.removeItem(STORAGE_KEY);
+
+    return null;
+  }
+}
+
+// ==================================================
 // APP
 // ==================================================
 
 function App() {
   const [user, setUser] = useState(null);
-
   const [checkingAuth, setCheckingAuth] = useState(true);
 
   const [analysis, setAnalysis] = useState(null);
 
   // ==================================================
-  // CHECK AUTHENTICATION
+  // AUTHENTICATION
   // ==================================================
 
   useEffect(() => {
@@ -74,7 +100,7 @@ function App() {
         // NOT AUTHENTICATED
         // --------------------------------------------
 
-        if (!response.data.authenticated) {
+        if (!response.data?.authenticated) {
           setUser(null);
           setAnalysis(null);
 
@@ -92,28 +118,14 @@ function App() {
         setUser(response.data.user || null);
 
         // --------------------------------------------
-        // RESTORE ANALYZED FOLDER SESSION
+        // RESTORE ANALYZED FOLDER
         // --------------------------------------------
 
-        try {
-          const savedSession = localStorage.getItem(STORAGE_KEY);
+        const savedSession = getSavedAnalysis();
 
-          if (savedSession) {
-            const parsedSession = JSON.parse(savedSession);
-
-            if (parsedSession?.analysis) {
-              setAnalysis(parsedSession.analysis);
-            } else {
-              setAnalysis(null);
-            }
-          } else {
-            setAnalysis(null);
-          }
-        } catch (error) {
-          console.error("Failed to restore Drive session:", error);
-
-          localStorage.removeItem(STORAGE_KEY);
-
+        if (savedSession) {
+          setAnalysis(savedSession.analysis);
+        } else {
           setAnalysis(null);
         }
       } catch (error) {
@@ -145,29 +157,31 @@ function App() {
   // ANALYSIS COMPLETE
   // ==================================================
 
-  function handleAnalysisComplete(newAnalysis) {
+  function handleAnalysisComplete(newAnalysis, folderUrl) {
+    setAnalysis(newAnalysis);
+
     /*
-     * Only update the analyzed-folder
-     * state here.
-     *
-     * Chat history is NOT checked because
-     * it does not affect routing.
+     * Analyze.jsx normally saves this already.
+     * We save it here as well so App state and
+     * localStorage stay synchronized.
      */
 
-    setAnalysis(newAnalysis);
+    if (newAnalysis && folderUrl) {
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({
+          folderUrl,
+          analysis: newAnalysis,
+        }),
+      );
+    }
   }
 
   // ==================================================
-  // SYNC ANOTHER FOLDER
+  // CLEAR CURRENT DRIVE SESSION
   // ==================================================
 
-  function handleSyncAnotherFolder() {
-    /*
-     * Clear the current analyzed folder.
-     *
-     * Chat history is NOT deleted.
-     */
-
+  function clearSession() {
     localStorage.removeItem(STORAGE_KEY);
 
     localStorage.removeItem(ACTIVE_CHAT_KEY);
@@ -176,16 +190,20 @@ function App() {
   }
 
   // ==================================================
-  // ROOT ROUTE
+  // SYNC ANOTHER FOLDER
+  // ==================================================
+
+  function handleSyncAnotherFolder() {
+    clearSession();
+  }
+
+  // ==================================================
+  // ROOT REDIRECT
   // ==================================================
 
   function RootRoute() {
-    // --------------------------------------------
-    // CHECKING AUTH
-    // --------------------------------------------
-
     if (checkingAuth) {
-      return <LoadingScreen text="Checking authentication..." />;
+      return <LoadingScreen />;
     }
 
     // --------------------------------------------
@@ -200,9 +218,9 @@ function App() {
     // CHECK ANALYZED FOLDER
     // --------------------------------------------
 
-    const hasAnalyzedFolder = Boolean(
-      analysis || localStorage.getItem(STORAGE_KEY),
-    );
+    const savedSession = getSavedAnalysis();
+
+    const hasAnalyzedFolder = Boolean(analysis || savedSession);
 
     // --------------------------------------------
     // ANALYZED FOLDER EXISTS
@@ -225,18 +243,14 @@ function App() {
 
   return (
     <Routes>
-      {/* ==================================================
-          LOGIN
-      ================================================== */}
+      {/* LOGIN */}
 
       <Route
         path="/login"
         element={<Login user={user} checkingAuth={checkingAuth} />}
       />
 
-      {/* ==================================================
-          ANALYZE
-      ================================================== */}
+      {/* ANALYZE */}
 
       <Route
         path="/analyze"
@@ -247,9 +261,7 @@ function App() {
         }
       />
 
-      {/* ==================================================
-          CHAT
-      ================================================== */}
+      {/* CHAT */}
 
       <Route
         path="/chat"
@@ -264,15 +276,11 @@ function App() {
         }
       />
 
-      {/* ==================================================
-          ROOT
-      ================================================== */}
+      {/* ROOT */}
 
       <Route path="/" element={<RootRoute />} />
 
-      {/* ==================================================
-          UNKNOWN ROUTES
-      ================================================== */}
+      {/* UNKNOWN */}
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

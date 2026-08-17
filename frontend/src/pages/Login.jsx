@@ -18,7 +18,7 @@ function Login({ user, checkingAuth }) {
   const navigate = useNavigate();
 
   // ==================================================
-  // REDIRECT IF ALREADY AUTHENTICATED
+  // REDIRECT AFTER AUTHENTICATION
   // ==================================================
 
   useEffect(() => {
@@ -32,7 +32,13 @@ function Login({ user, checkingAuth }) {
       if (savedSession) {
         const parsedSession = JSON.parse(savedSession);
 
-        if (parsedSession?.analysis) {
+        /*
+         * User has already analyzed a folder.
+         *
+         * Chat history does NOT matter.
+         */
+
+        if (parsedSession?.folderUrl && parsedSession?.analysis) {
           navigate("/chat", {
             replace: true,
           });
@@ -46,6 +52,7 @@ function Login({ user, checkingAuth }) {
       localStorage.removeItem(STORAGE_KEY);
     }
 
+    // No analyzed folder
     navigate("/analyze", {
       replace: true,
     });
@@ -66,8 +73,6 @@ function Login({ user, checkingAuth }) {
   if (checkingAuth) {
     return (
       <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#080808] text-white">
-        {/* Background */}
-
         <Background />
 
         <div className="relative flex flex-col items-center">
@@ -88,6 +93,30 @@ function Login({ user, checkingAuth }) {
   }
 
   // ==================================================
+  // ALREADY AUTHENTICATED
+  // ==================================================
+
+  if (user) {
+    return (
+      <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#080808] text-white">
+        <Background />
+
+        <div className="relative flex flex-col items-center">
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-white/[0.09] bg-white/[0.035] shadow-2xl backdrop-blur-xl">
+            <FiFolder className="text-lg text-neutral-300" />
+          </div>
+
+          <p className="mt-5 text-sm font-medium text-neutral-300">Zentra</p>
+
+          <p className="mt-2 text-xs text-neutral-600">
+            Opening your workspace...
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // ==================================================
   // LOGIN PAGE
   // ==================================================
 
@@ -95,23 +124,13 @@ function Login({ user, checkingAuth }) {
     <div className="relative min-h-screen overflow-hidden bg-[#080808] text-white">
       <Background />
 
-      {/* ==================================================
-          MAIN
-      ================================================== */}
-
       <main className="relative flex min-h-screen items-center justify-center px-5 py-12">
         <div className="w-full max-w-5xl">
-          {/* ==================================================
-              BRAND
-          ================================================== */}
+          {/* BRAND */}
 
           <div className="mb-12 text-center">
             <div className="relative mx-auto mb-6 flex h-16 w-16 items-center justify-center">
-              {/* Outer glow */}
-
               <div className="absolute inset-0 rounded-2xl bg-white/[0.03] blur-xl" />
-
-              {/* Icon */}
 
               <div className="relative flex h-16 w-16 items-center justify-center rounded-2xl border border-white/[0.09] bg-white/[0.035] shadow-2xl backdrop-blur-xl">
                 <FiFolder className="text-xl text-neutral-200" />
@@ -132,26 +151,18 @@ function Login({ user, checkingAuth }) {
             </p>
           </div>
 
-          {/* ==================================================
-              CONTENT
-          ================================================== */}
+          {/* CONTENT */}
 
           <div className="grid gap-5 lg:grid-cols-[1fr_420px] lg:items-center">
-            {/* ==================================================
-                LEFT INFORMATION
-            ================================================== */}
+            {/* FEATURES */}
 
             <div className="hidden lg:block">
               <div className="grid grid-cols-2 gap-3">
-                {/* Card 1 */}
-
                 <FeatureCard
                   icon={<FiFolder />}
                   title="Connect"
                   description="Connect a Google Drive folder and bring your documents into Zentra."
                 />
-
-                {/* Card 2 */}
 
                 <FeatureCard
                   icon={<FiSearch />}
@@ -159,15 +170,11 @@ function Login({ user, checkingAuth }) {
                   description="Find relevant information across your indexed documents."
                 />
 
-                {/* Card 3 */}
-
                 <FeatureCard
                   icon={<FiDatabase />}
                   title="Understand"
                   description="Your documents become a searchable knowledge base."
                 />
-
-                {/* Card 4 */}
 
                 <FeatureCard
                   icon={<FiFileText />}
@@ -175,8 +182,6 @@ function Login({ user, checkingAuth }) {
                   description="Ask natural questions and receive answers with document sources."
                 />
               </div>
-
-              {/* Bottom statement */}
 
               <div className="mt-5 flex items-center gap-3 rounded-2xl border border-white/[0.06] bg-white/[0.02] px-5 py-4 backdrop-blur-xl">
                 <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-white/[0.06] bg-white/[0.03]">
@@ -195,18 +200,12 @@ function Login({ user, checkingAuth }) {
               </div>
             </div>
 
-            {/* ==================================================
-                LOGIN CARD
-            ================================================== */}
+            {/* LOGIN CARD */}
 
             <div className="relative">
-              {/* Card glow */}
-
               <div className="absolute -inset-8 rounded-[40px] bg-white/[0.015] blur-3xl" />
 
               <div className="relative rounded-3xl border border-white/[0.09] bg-white/[0.035] p-6 shadow-2xl backdrop-blur-2xl sm:p-8">
-                {/* Header */}
-
                 <div className="text-center">
                   <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.04]">
                     <FiDatabase className="text-sm text-neutral-400" />
@@ -220,8 +219,6 @@ function Login({ user, checkingAuth }) {
                     Sign in with Google to connect and explore your documents.
                   </p>
                 </div>
-
-                {/* Login button */}
 
                 <button
                   type="button"
@@ -257,17 +254,8 @@ function Login({ user, checkingAuth }) {
                     <span>Continue with Google</span>
                   </div>
 
-                  <FiArrowRight
-                    className="
-                      text-sm
-                      transition-transform
-                      duration-200
-                      group-hover:translate-x-0.5
-                    "
-                  />
+                  <FiArrowRight className="text-sm transition-transform duration-200 group-hover:translate-x-0.5" />
                 </button>
-
-                {/* Divider */}
 
                 <div className="my-6 flex items-center gap-3">
                   <div className="h-px flex-1 bg-white/[0.06]" />
@@ -278,8 +266,6 @@ function Login({ user, checkingAuth }) {
 
                   <div className="h-px flex-1 bg-white/[0.06]" />
                 </div>
-
-                {/* Security */}
 
                 <div className="flex items-start gap-3 rounded-xl border border-white/[0.05] bg-black/20 p-3.5">
                   <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/[0.06] bg-white/[0.025]">
@@ -301,10 +287,6 @@ function Login({ user, checkingAuth }) {
             </div>
           </div>
 
-          {/* ==================================================
-              FOOTER
-          ================================================== */}
-
           <p className="mt-10 text-center text-[10px] tracking-wide text-neutral-700">
             Zentra · Google Drive Knowledge System
           </p>
@@ -314,9 +296,9 @@ function Login({ user, checkingAuth }) {
   );
 }
 
-// ======================================================
+// ==================================================
 // FEATURE CARD
-// ======================================================
+// ==================================================
 
 function FeatureCard({ icon, title, description }) {
   return (
@@ -348,9 +330,9 @@ function FeatureCard({ icon, title, description }) {
   );
 }
 
-// ======================================================
+// ==================================================
 // BACKGROUND
-// ======================================================
+// ==================================================
 
 function Background() {
   return (
@@ -377,49 +359,15 @@ function Background() {
 
       {/* Top glow */}
 
-      <div
-        className="
-          absolute
-          left-1/2
-          top-[-400px]
-          h-[750px]
-          w-[750px]
-          -translate-x-1/2
-          rounded-full
-          bg-white/[0.025]
-          blur-[140px]
-        "
-      />
+      <div className="absolute left-1/2 top-[-400px] h-[750px] w-[750px] -translate-x-1/2 rounded-full bg-white/[0.025] blur-[140px]" />
 
       {/* Left glow */}
 
-      <div
-        className="
-          absolute
-          left-[-250px]
-          top-[35%]
-          h-[500px]
-          w-[500px]
-          rounded-full
-          bg-white/[0.012]
-          blur-[130px]
-        "
-      />
+      <div className="absolute left-[-250px] top-[35%] h-[500px] w-[500px] rounded-full bg-white/[0.012] blur-[130px]" />
 
       {/* Right glow */}
 
-      <div
-        className="
-          absolute
-          bottom-[-300px]
-          right-[-150px]
-          h-[550px]
-          w-[550px]
-          rounded-full
-          bg-white/[0.012]
-          blur-[130px]
-        "
-      />
+      <div className="absolute bottom-[-300px] right-[-150px] h-[550px] w-[550px] rounded-full bg-white/[0.012] blur-[130px]" />
 
       {/* Floating document */}
 
