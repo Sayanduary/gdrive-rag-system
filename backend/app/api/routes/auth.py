@@ -257,28 +257,17 @@ def google_callback(
         flow.state = state
 
     # ==================================================
-    # CORRECT RENDER HTTPS PROXY
+    # CORRECT RENDER / VERCEL PROXY REDIRECT URI
     # ==================================================
 
-    auth_response_url = str(
-        request.url
-    )
-
-    if (
-        settings.GOOGLE_REDIRECT_URI.startswith(
-            "https://"
-        )
-        and auth_response_url.startswith(
-            "http://"
-        )
-    ):
-
-        auth_response_url = (
-            "https://"
-            + auth_response_url[
-                len("http://"):
-            ]
-        )
+    # When proxied via Vercel, request.url host contains the container backend host
+    # (e.g. gdrive-rag-system-h5sf.onrender.com). We construct auth_response_url
+    # using settings.GOOGLE_REDIRECT_URI so it matches flow.redirect_uri exactly.
+    query_str = str(request.url.query) if request.url.query else ""
+    if query_str:
+        auth_response_url = f"{settings.GOOGLE_REDIRECT_URI}?{query_str}"
+    else:
+        auth_response_url = settings.GOOGLE_REDIRECT_URI
 
     print(
         "AUTHORIZATION RESPONSE URL:",
