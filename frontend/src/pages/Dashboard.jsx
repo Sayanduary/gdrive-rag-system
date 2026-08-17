@@ -227,22 +227,22 @@ function Dashboard({ user, onLogout }) {
         activeTab="dashboard"
       />
 
-      <main className="relative mx-auto w-full max-w-6xl px-5 py-8 sm:px-6 lg:px-8">
+      <main className="relative mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
         {/* ==================================================
             HEADER
         ================================================== */}
 
-        <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="text-[10px] uppercase tracking-[0.22em] text-neutral-700">
               Zentra
             </p>
 
-            <h1 className="mt-2 text-3xl font-semibold tracking-[-0.025em] text-neutral-100">
+            <h1 className="mt-1 text-2xl font-semibold tracking-[-0.025em] text-neutral-100 sm:text-3xl">
               Knowledge dashboard
             </h1>
 
-            <p className="mt-2 max-w-xl text-sm leading-6 text-neutral-500">
+            <p className="mt-1.5 max-w-xl text-xs leading-5 text-neutral-500 sm:text-sm sm:leading-6">
               Manage the Google Drive folders and files currently indexed in
               your Zentra knowledge base.
             </p>
@@ -256,6 +256,7 @@ function Dashboard({ user, onLogout }) {
             className="
               inline-flex
               h-10
+              w-full
               shrink-0
               items-center
               justify-center
@@ -272,6 +273,7 @@ function Dashboard({ user, onLogout }) {
               hover:border-white/[0.14]
               hover:bg-white/[0.07]
               hover:text-white
+              sm:w-auto
             "
           >
             <FiRefreshCw />

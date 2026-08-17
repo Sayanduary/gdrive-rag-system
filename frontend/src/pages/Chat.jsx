@@ -780,6 +780,9 @@ function Chat({ user, onSyncAnotherFolder, onLogout }) {
         onLogout={onLogout}
         showDashboard={true}
         showChat={true}
+        showHistory={true}
+        onHistory={() => setMobileSidebarOpen(true)}
+        activeTab="chat"
       />
 
       {/* ==================================================
