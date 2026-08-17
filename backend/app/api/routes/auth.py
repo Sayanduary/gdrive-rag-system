@@ -113,9 +113,14 @@ def google_callback(request: Request):
     if state:
         flow.state = state
 
+    auth_response_url = str(request.url)
+    if settings.GOOGLE_REDIRECT_URI.startswith("https://") and auth_response_url.startswith("http://"):
+        auth_response_url = auth_response_url.replace("http://", "https://", 1)
+
     flow.fetch_token(
-        authorization_response=str(request.url)
+        authorization_response=auth_response_url
     )
+
 
     credentials = flow.credentials
 

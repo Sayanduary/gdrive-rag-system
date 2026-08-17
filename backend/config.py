@@ -25,9 +25,10 @@ class Settings(BaseSettings):
     FRONTEND_URL: str = "https://gdrive-rag-system.vercel.app"
 
 
-    SESSION_COOKIE_SAMESITE: str = "lax"
+    SESSION_COOKIE_SAMESITE: str = "none"
 
-    SESSION_COOKIE_SECURE: bool = False
+    SESSION_COOKIE_SECURE: bool = True
+
 
     # ==================================================
     # RETRIEVAL

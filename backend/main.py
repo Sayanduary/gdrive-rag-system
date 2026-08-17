@@ -27,12 +27,20 @@ app = FastAPI(
 # --------------------------------------------------
 
 # 1. Session Middleware
+same_site = settings.SESSION_COOKIE_SAMESITE
+https_only = settings.SESSION_COOKIE_SECURE
+
+if settings.FRONTEND_URL.startswith("https://"):
+    same_site = "none"
+    https_only = True
+
 app.add_middleware(
     SessionMiddleware,
     secret_key=settings.SESSION_SECRET,
-    same_site=settings.SESSION_COOKIE_SAMESITE,
-    https_only=settings.SESSION_COOKIE_SECURE,
+    same_site=same_site,
+    https_only=https_only,
 )
+
 
 # 2. CORS Middleware
 origins = [
