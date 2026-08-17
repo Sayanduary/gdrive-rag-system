@@ -719,7 +719,7 @@ function Chat({ user, onSyncAnotherFolder }) {
           APP LAYOUT
       ================================================== */}
 
-      <div className="relative flex h-[calc(100vh-84px)]">
+      <div className="relative flex h-[calc(100dvh-84px)] overflow-hidden">
         {/* ==================================================
             SIDEBAR
         ================================================== */}
@@ -907,22 +907,22 @@ function Chat({ user, onSyncAnotherFolder }) {
             MAIN CHAT
         ================================================== */}
 
-        <main className="relative min-w-0 flex-1">
+        <main className="relative flex h-full min-w-0 flex-1 flex-col overflow-hidden">
           {/* Message Scroll */}
 
           <div
             ref={messagesContainerRef}
             className="
-              absolute
-              inset-0
+              min-h-0
+              flex-1
               overflow-y-auto
               px-4
-              pb-48
-              pt-10
+              py-6
               sm:px-6
+              sm:py-8
             "
           >
-            <div className="mx-auto w-full max-w-3xl">
+            <div className="mx-auto w-full max-w-3xl pb-4">
               {/* Empty State */}
 
               {messages.length === 0 && !loading && !error ? (
@@ -1133,14 +1133,12 @@ function Chat({ user, onSyncAnotherFolder }) {
           </div>
 
           {/* ==================================================
-              COMPOSER
+              COMPOSER (STICKY CHAT BOX AT BOTTOM)
           ================================================== */}
 
-          <div className="pointer-events-none absolute bottom-0 left-0 right-0 z-40">
-            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-48 bg-gradient-to-t from-[#0d0d0d] via-[#0d0d0d]/95 to-transparent" />
-
-            <div className="relative mx-auto w-full max-w-3xl px-4 pb-5 sm:px-6">
-              <div className="pointer-events-auto rounded-2xl border border-white/[0.09] bg-[#151515]/95 p-2 shadow-2xl backdrop-blur-xl">
+          <div className="sticky bottom-0 z-40 shrink-0 w-full bg-[#0d0d0d] border-t border-white/[0.06] px-4 py-3 sm:px-6 sm:py-4">
+            <div className="mx-auto w-full max-w-3xl">
+              <div className="rounded-2xl border border-white/[0.09] bg-[#151515] p-2 shadow-2xl backdrop-blur-xl">
                 <textarea
                   value={question}
                   onChange={(event) => setQuestion(event.target.value)}
@@ -1149,13 +1147,13 @@ function Chat({ user, onSyncAnotherFolder }) {
                   rows={1}
                   disabled={loading}
                   className="
-                    max-h-40
-                    min-h-[52px]
+                    max-h-36
+                    min-h-[48px]
                     w-full
                     resize-none
                     bg-transparent
-                    px-4
-                    py-3
+                    px-3
+                    py-2.5
                     text-sm
                     leading-6
                     text-neutral-200
@@ -1165,16 +1163,17 @@ function Chat({ user, onSyncAnotherFolder }) {
                   "
                 />
 
-                <div className="flex items-center justify-between px-2 pb-1">
+                <div className="flex items-center justify-between px-2 pb-1 pt-1">
                   <div className="hidden items-center gap-1.5 text-[10px] text-neutral-700 sm:flex">
                     <FiShield />
-                    Drive documents
+                    <span>Drive documents</span>
                   </div>
 
                   <button
                     onClick={askQuestion}
                     disabled={loading || !question.trim()}
                     className="
+                      ml-auto
                       flex
                       h-9
                       w-9
@@ -1195,7 +1194,7 @@ function Chat({ user, onSyncAnotherFolder }) {
                 </div>
               </div>
 
-              <p className="pointer-events-auto mt-2 text-center text-[10px] text-neutral-700">
+              <p className="mt-2 text-center text-[10px] text-neutral-600">
                 AI-generated answers are based on your indexed Google Drive
                 documents.
               </p>
@@ -1203,36 +1202,6 @@ function Chat({ user, onSyncAnotherFolder }) {
           </div>
         </main>
       </div>
-
-      {/* ==================================================
-          MOBILE NEW CHAT
-      ================================================== */}
-
-      <button
-        onClick={createNewChat}
-        disabled={loading}
-        className="
-          fixed
-          bottom-24
-          right-5
-          z-50
-          flex
-          h-11
-          w-11
-          items-center
-          justify-center
-          rounded-full
-          border
-          border-white/[0.08]
-          bg-[#151515]
-          text-neutral-300
-          shadow-xl
-          lg:hidden
-        "
-        title="New chat"
-      >
-        <FiPlus />
-      </button>
     </div>
   );
 }
