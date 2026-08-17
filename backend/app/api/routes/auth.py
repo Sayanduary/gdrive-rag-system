@@ -54,13 +54,40 @@ def create_google_flow():
 
 
 # ==================================================
-# LOGIN
+# GOOGLE LOGIN
 # ==================================================
 
 @router.get("/google")
 def google_login(
     request: Request,
 ):
+
+    print(
+        "========================================"
+    )
+
+    print(
+        "GOOGLE OAUTH LOGIN"
+    )
+
+    print(
+        "GOOGLE_CLIENT_ID:",
+        settings.GOOGLE_CLIENT_ID
+    )
+
+    print(
+        "GOOGLE_REDIRECT_URI:",
+        settings.GOOGLE_REDIRECT_URI
+    )
+
+    print(
+        "FRONTEND_URL:",
+        settings.FRONTEND_URL
+    )
+
+    print(
+        "========================================"
+    )
 
     flow = create_google_flow()
 
@@ -94,7 +121,7 @@ def google_login(
 
 
 # ==================================================
-# CALLBACK
+# GOOGLE CALLBACK
 # ==================================================
 
 @router.get("/google/callback")
@@ -102,12 +129,34 @@ def google_callback(
     request: Request,
 ):
 
+    print(
+        "========================================"
+    )
+
+    print(
+        "GOOGLE OAUTH CALLBACK"
+    )
+
+    print(
+        "REQUEST URL:",
+        str(request.url)
+    )
+
+    print(
+        "CONFIGURED REDIRECT:",
+        settings.GOOGLE_REDIRECT_URI
+    )
+
+    print(
+        "========================================"
+    )
+
     code = request.query_params.get(
         "code"
     )
 
     # ------------------------------------------
-    # Google returned an OAuth error
+    # OAuth error
     # ------------------------------------------
 
     if not code:
@@ -135,7 +184,7 @@ def google_callback(
         )
 
     # ------------------------------------------
-    # Recreate flow
+    # Create OAuth flow
     # ------------------------------------------
 
     flow = create_google_flow()
@@ -155,7 +204,7 @@ def google_callback(
         )
 
     # ------------------------------------------
-    # Restore OAuth state
+    # Restore state
     # ------------------------------------------
 
     state = request.session.get(
@@ -167,10 +216,7 @@ def google_callback(
         flow.state = state
 
     # ------------------------------------------
-    # Render's proxy terminates HTTPS.
-    #
-    # Make sure Google's callback URL is
-    # interpreted as HTTPS.
+    # Correct proxy HTTPS
     # ------------------------------------------
 
     auth_response_url = str(
@@ -189,8 +235,14 @@ def google_callback(
         auth_response_url = (
             "https://"
             + auth_response_url[
-                len("http://"):]
+                len("http://"):
+            ]
         )
+
+    print(
+        "AUTHORIZATION RESPONSE URL:",
+        auth_response_url
+    )
 
     # ------------------------------------------
     # Exchange authorization code
@@ -232,7 +284,7 @@ def google_callback(
     }
 
     # ------------------------------------------
-    # Get Google user
+    # Fetch Google user
     # ------------------------------------------
 
     user_response = (
@@ -272,7 +324,7 @@ def google_callback(
     }
 
     # ------------------------------------------
-    # Cleanup temporary OAuth state
+    # Remove temporary OAuth values
     # ------------------------------------------
 
     request.session.pop(
@@ -285,6 +337,13 @@ def google_callback(
         None,
     )
 
+    print(
+        "AUTHENTICATED USER:",
+        request.session.get(
+            "google_user"
+        )
+    )
+
     # ------------------------------------------
     # Redirect to frontend
     # ------------------------------------------
@@ -292,6 +351,11 @@ def google_callback(
     frontend_url = (
         settings.FRONTEND_URL
         .rstrip("/")
+    )
+
+    print(
+        "REDIRECTING TO:",
+        frontend_url
     )
 
     return RedirectResponse(
@@ -310,6 +374,11 @@ def get_current_user(
 
     user = request.session.get(
         "google_user"
+    )
+
+    print(
+        "AUTH /ME USER:",
+        user
     )
 
     if not user:
