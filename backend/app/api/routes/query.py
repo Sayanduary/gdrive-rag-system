@@ -549,7 +549,8 @@ def query_documents_stream(
                 "no",
 
             "Access-Control-Allow-Origin":
-                "http://localhost:5173",
+                request.headers.get("origin") or settings.FRONTEND_URL,
+
 
             "Access-Control-Allow-Credentials":
                 "true",

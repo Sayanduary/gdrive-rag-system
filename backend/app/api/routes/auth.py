@@ -146,8 +146,9 @@ def google_callback(request: Request):
     )
 
     return RedirectResponse(
-        "http://localhost:5173/"
+        f"{settings.FRONTEND_URL.rstrip('/')}/"
     )
+
 
 
 @router.get("/me")

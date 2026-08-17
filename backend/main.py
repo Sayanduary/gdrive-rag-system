@@ -23,34 +23,33 @@ app = FastAPI(
 
 
 # --------------------------------------------------
-# CORS
+# Middleware Configuration
 # --------------------------------------------------
+
+# 1. Session Middleware
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=settings.SESSION_SECRET,
+    same_site=settings.SESSION_COOKIE_SAMESITE,
+    https_only=settings.SESSION_COOKIE_SECURE,
+)
+
+# 2. CORS Middleware
+origins = [
+    "http://localhost:5173",
+    "https://gdrive-rag-system.vercel.app",
+]
+if settings.FRONTEND_URL and settings.FRONTEND_URL not in origins:
+    origins.append(settings.FRONTEND_URL)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-    ],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-
-# --------------------------------------------------
-# Session
-# --------------------------------------------------
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "https://gdrive-rag-system.vercel.app"
-    ],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 
 # --------------------------------------------------

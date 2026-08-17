@@ -5,7 +5,7 @@ import { FcGoogle } from "react-icons/fc";
 
 function Login({ user, checkingAuth }) {
   const navigate = useNavigate();
-  const API_URL = import.meta.env.VITE_API_BASE_URL;
+
   useEffect(() => {
     if (!checkingAuth && user) {
       const savedSession = localStorage.getItem("gdrive_rag_session");
@@ -18,7 +18,10 @@ function Login({ user, checkingAuth }) {
   }, [user, checkingAuth, navigate]);
 
   function login() {
-   window.location.href = `${API_URL}/api/auth/google`;
+    const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL || "http://localhost:8000").replace(/\/$/, "");
+    window.location.href = `${apiBaseUrl}/api/auth/google`;
+  }
+
 
 
   if (checkingAuth) {

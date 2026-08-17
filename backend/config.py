@@ -21,6 +21,12 @@ class Settings(BaseSettings):
         "http://localhost:8000/api/auth/google/callback"
     )
 
+    FRONTEND_URL: str = "http://localhost:5173"
+
+    SESSION_COOKIE_SAMESITE: str = "lax"
+
+    SESSION_COOKIE_SECURE: bool = False
+
     # ==================================================
     # RETRIEVAL
     # ==================================================
