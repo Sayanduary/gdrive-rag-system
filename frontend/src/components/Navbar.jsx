@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import {
+  FiBarChart2,
   FiFolder,
   FiLogOut,
   FiMessageSquare,
@@ -12,20 +13,26 @@ import api from "../services/api";
 
 function Navbar({
   user,
+  onDashboard,
   onChat,
   onSyncAnotherFolder,
   onHistory,
+  showDashboard = false,
   showChat = false,
   showSync = false,
   showHistory = false,
+  activeTab = "",
 }) {
   const [open, setOpen] = useState(false);
 
   const menuRef = useRef(null);
 
   const displayName = user?.name || "Google User";
+
   const email = user?.email || "";
+
   const avatar = user?.picture || "";
+
   const initial = displayName.charAt(0).toUpperCase();
 
   // ==================================================
@@ -45,6 +52,18 @@ function Navbar({
       document.removeEventListener("mousedown", handleClickOutside);
     };
   }, []);
+
+  // ==================================================
+  // DASHBOARD
+  // ==================================================
+
+  function handleDashboard() {
+    setOpen(false);
+
+    if (typeof onDashboard === "function") {
+      onDashboard();
+    }
+  }
 
   // ==================================================
   // CHAT
@@ -93,11 +112,25 @@ function Navbar({
       console.error("Logout failed:", error);
     } finally {
       localStorage.removeItem("gdrive_rag_session");
+
+      // Remove any old global key.
       localStorage.removeItem("gdrive_rag_active_conversation");
+
+      // Remove the current user's
+      // active conversation key.
+      const userId = user?.sub || user?.email;
+
+      if (userId) {
+        localStorage.removeItem(`gdrive_rag_active_conversation_${userId}`);
+      }
 
       window.location.href = "/";
     }
   }
+
+  const isDashboardActive = activeTab === "dashboard";
+
+  const isChatActive = activeTab === "chat";
 
   return (
     <header className="relative z-50 border-b border-white/[0.06] bg-[#0d0d0d]/90 backdrop-blur-xl">
@@ -107,9 +140,7 @@ function Navbar({
         ================================================== */}
 
         <div className="flex items-center gap-3">
-          {/* ==================================================
-              MOBILE CHAT HISTORY BUTTON
-          ================================================== */}
+          {/* MOBILE CHAT HISTORY */}
 
           {showHistory && (
             <button
@@ -138,15 +169,23 @@ function Navbar({
             </button>
           )}
 
-          {/* ==================================================
-              BRAND
-          ================================================== */}
+          {/* BRAND */}
 
           <button
             type="button"
-            onClick={showChat ? handleChat : undefined}
-            className={`flex items-center gap-4 ${showChat ? "cursor-pointer" : "cursor-default"
-              }`}
+            onClick={
+              showDashboard
+                ? handleDashboard
+                : showChat
+                  ? handleChat
+                  : undefined
+            }
+            className={`
+              flex
+              items-center
+              gap-4
+              ${showDashboard || showChat ? "cursor-pointer" : "cursor-default"}
+            `}
           >
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/[0.12] bg-white/[0.04]">
               <FiFolder className="text-[20px] text-neutral-300" />
@@ -164,33 +203,90 @@ function Navbar({
 
         <div className="flex items-center gap-2 sm:gap-3">
           {/* ==================================================
-              CHAT BUTTON
+              DASHBOARD TAB
+          ================================================== */}
+
+          {showDashboard && (
+            <button
+              type="button"
+              onClick={handleDashboard}
+              className={`
+                flex
+                items-center
+                gap-2
+                rounded-xl
+                border
+                px-3
+                py-2.5
+                text-xs
+                font-medium
+                transition-all
+                duration-200
+                ${
+                  isDashboardActive
+                    ? `
+                      border-white/[0.13]
+                      bg-white/[0.08]
+                      text-white
+                      shadow-[0_0_20px_rgba(255,255,255,0.025)]
+                    `
+                    : `
+                      border-white/[0.08]
+                      bg-white/[0.035]
+                      text-neutral-400
+                      hover:border-white/[0.14]
+                      hover:bg-white/[0.07]
+                      hover:text-white
+                    `
+                }
+              `}
+            >
+              <FiBarChart2 />
+
+              <span>Dashboard</span>
+            </button>
+          )}
+
+          {/* ==================================================
+              CHAT TAB
           ================================================== */}
 
           {showChat && (
             <button
               type="button"
               onClick={handleChat}
-              className="
+              className={`
                 flex
                 items-center
                 gap-2
                 rounded-xl
                 border
-                border-white/[0.08]
-                bg-white/[0.035]
                 px-3
                 py-2.5
                 text-xs
                 font-medium
-                text-neutral-400
-                transition
-                hover:border-white/[0.14]
-                hover:bg-white/[0.07]
-                hover:text-white
-              "
+                transition-all
+                duration-200
+                ${
+                  isChatActive
+                    ? `
+                      border-white/[0.13]
+                      bg-white/[0.08]
+                      text-white
+                    `
+                    : `
+                      border-white/[0.08]
+                      bg-white/[0.035]
+                      text-neutral-400
+                      hover:border-white/[0.14]
+                      hover:bg-white/[0.07]
+                      hover:text-white
+                    `
+                }
+              `}
             >
               <FiMessageSquare />
+
               <span>Chat</span>
             </button>
           )}
@@ -223,9 +319,9 @@ function Navbar({
               "
             >
               <FiRefreshCw />
-              <span className="hidden sm:inline">
-                Sync another folder
-              </span>
+
+              <span className="hidden sm:inline">Sync another folder</span>
+
               <span className="sm:hidden">Sync</span>
             </button>
           )}
@@ -297,6 +393,81 @@ function Navbar({
                   </p>
                 </div>
 
+                {showDashboard && (
+                  <button
+                    type="button"
+                    onClick={handleDashboard}
+                    className="
+                      flex
+                      w-full
+                      items-center
+                      gap-3
+                      px-4
+                      py-3
+                      text-left
+                      text-sm
+                      text-neutral-400
+                      transition
+                      hover:bg-white/[0.05]
+                      hover:text-white
+                    "
+                  >
+                    <FiBarChart2 />
+
+                    <span>Dashboard</span>
+                  </button>
+                )}
+
+                {showChat && (
+                  <button
+                    type="button"
+                    onClick={handleChat}
+                    className="
+                      flex
+                      w-full
+                      items-center
+                      gap-3
+                      px-4
+                      py-3
+                      text-left
+                      text-sm
+                      text-neutral-400
+                      transition
+                      hover:bg-white/[0.05]
+                      hover:text-white
+                    "
+                  >
+                    <FiMessageSquare />
+
+                    <span>Chat</span>
+                  </button>
+                )}
+
+                {showSync && (
+                  <button
+                    type="button"
+                    onClick={handleSyncAnotherFolder}
+                    className="
+                      flex
+                      w-full
+                      items-center
+                      gap-3
+                      px-4
+                      py-3
+                      text-left
+                      text-sm
+                      text-neutral-400
+                      transition
+                      hover:bg-white/[0.05]
+                      hover:text-white
+                    "
+                  >
+                    <FiRefreshCw />
+
+                    <span>Sync another folder</span>
+                  </button>
+                )}
+
                 <button
                   type="button"
                   onClick={logout}
@@ -305,6 +476,8 @@ function Navbar({
                     w-full
                     items-center
                     gap-3
+                    border-t
+                    border-white/[0.06]
                     px-4
                     py-3
                     text-left

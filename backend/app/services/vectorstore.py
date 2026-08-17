@@ -7,6 +7,10 @@ from config import settings
 
 class VectorStore:
 
+    # ==================================================
+    # INITIALIZATION
+    # ==================================================
+
     def __init__(self):
 
         if not settings.DATABASE_URL:
@@ -149,17 +153,20 @@ class VectorStore:
 
             if not user_id:
                 raise ValueError(
-                    "Every chunk must contain user_id."
+                    "Every chunk must contain "
+                    "user_id."
                 )
 
             if not folder_id:
                 raise ValueError(
-                    "Every chunk must contain folder_id."
+                    "Every chunk must contain "
+                    "folder_id."
                 )
 
             if not file_id:
                 raise ValueError(
-                    "Every chunk must contain file_id."
+                    "Every chunk must contain "
+                    "file_id."
                 )
 
             chunk_id = metadata.get(
@@ -220,24 +227,33 @@ class VectorStore:
                 %s,
                 %s::extensions.vector
             )
+
             ON CONFLICT (id)
             DO UPDATE SET
 
-                user_id = EXCLUDED.user_id,
+                user_id =
+                    EXCLUDED.user_id,
 
-                folder_id = EXCLUDED.folder_id,
+                folder_id =
+                    EXCLUDED.folder_id,
 
-                file_id = EXCLUDED.file_id,
+                file_id =
+                    EXCLUDED.file_id,
 
-                file_name = EXCLUDED.file_name,
+                file_name =
+                    EXCLUDED.file_name,
 
-                path = EXCLUDED.path,
+                path =
+                    EXCLUDED.path,
 
-                mime_type = EXCLUDED.mime_type,
+                mime_type =
+                    EXCLUDED.mime_type,
 
-                chunk_id = EXCLUDED.chunk_id,
+                chunk_id =
+                    EXCLUDED.chunk_id,
 
-                content = EXCLUDED.content,
+                content =
+                    EXCLUDED.content,
 
                 modified_time =
                     EXCLUDED.modified_time,
@@ -245,7 +261,8 @@ class VectorStore:
                 embedding =
                     EXCLUDED.embedding,
 
-                updated_at = now()
+                updated_at =
+                    now()
         """
 
         with self.pool.connection() as connection:
@@ -290,7 +307,7 @@ class VectorStore:
             top_k = 5
 
         # ------------------------------------------
-        # Query embedding
+        # QUERY EMBEDDING
         # ------------------------------------------
 
         query_embedding = list(
@@ -304,7 +321,7 @@ class VectorStore:
         )
 
         # ------------------------------------------
-        # Tenant filters
+        # TENANT FILTERS
         # ------------------------------------------
 
         conditions = [
@@ -352,7 +369,8 @@ class VectorStore:
                 folder_id,
                 modified_time,
 
-                embedding <=> %s::extensions.vector
+                embedding
+                    <=> %s::extensions.vector
                     AS distance
 
             FROM public.document_chunks
@@ -360,7 +378,8 @@ class VectorStore:
             WHERE {where_clause}
 
             ORDER BY
-                embedding <=> %s::extensions.vector
+                embedding
+                    <=> %s::extensions.vector
 
             LIMIT %s
         """
@@ -402,31 +421,33 @@ class VectorStore:
                 row["content"]
             )
 
-            metadatas.append({
-                "file_name":
-                    row["file_name"],
+            metadatas.append(
+                {
+                    "file_name":
+                        row["file_name"],
 
-                "file_id":
-                    row["file_id"],
+                    "file_id":
+                        row["file_id"],
 
-                "folder_id":
-                    row["folder_id"],
+                    "folder_id":
+                        row["folder_id"],
 
-                "path":
-                    row["path"],
+                    "path":
+                        row["path"],
 
-                "mime_type":
-                    row["mime_type"],
+                    "mime_type":
+                        row["mime_type"],
 
-                "chunk_id":
-                    row["chunk_id"],
+                    "chunk_id":
+                        row["chunk_id"],
 
-                "user_id":
-                    row["user_id"],
+                    "user_id":
+                        row["user_id"],
 
-                "modified_time":
-                    row["modified_time"],
-            })
+                    "modified_time":
+                        row["modified_time"],
+                }
+            )
 
             distances.append(
                 float(
@@ -436,22 +457,19 @@ class VectorStore:
 
         return {
             "ids": [ids],
-
             "documents": [
                 documents
             ],
-
             "metadatas": [
                 metadatas
             ],
-
             "distances": [
                 distances
             ],
         }
 
     # ==================================================
-    # COUNT
+    # COUNT CHUNKS
     # ==================================================
 
     def count(
@@ -490,7 +508,9 @@ class VectorStore:
 
         sql = f"""
             SELECT COUNT(*) AS total
+
             FROM public.document_chunks
+
             WHERE {where_clause}
         """
 
@@ -507,6 +527,124 @@ class VectorStore:
 
         return int(
             row["total"]
+        )
+
+    # ==================================================
+    # COUNT FILE CHUNKS
+    # ==================================================
+
+    def count_file(
+        self,
+        user_id: str,
+        folder_id: str,
+        file_id: str,
+    ) -> int:
+
+        if not user_id:
+            raise ValueError(
+                "user_id is required."
+            )
+
+        if not folder_id:
+            raise ValueError(
+                "folder_id is required."
+            )
+
+        if not file_id:
+            raise ValueError(
+                "file_id is required."
+            )
+
+        sql = """
+            SELECT COUNT(*) AS total
+            FROM public.document_chunks
+
+            WHERE user_id = %s
+              AND folder_id = %s
+              AND file_id = %s
+        """
+
+        with self.pool.connection() as connection:
+
+            with connection.cursor() as cursor:
+
+                cursor.execute(
+                    sql,
+                    (
+                        user_id,
+                        folder_id,
+                        file_id,
+                    ),
+                )
+
+                row = cursor.fetchone()
+
+        return int(
+            row["total"]
+        )
+
+    # ==================================================
+    # FOLDER FILE COUNT
+    # ==================================================
+
+    def get_folder_file_count(
+        self,
+        user_id: str,
+        folder_id: str,
+    ) -> int:
+
+        if not user_id:
+            raise ValueError(
+                "user_id is required."
+            )
+
+        if not folder_id:
+            raise ValueError(
+                "folder_id is required."
+            )
+
+        sql = """
+            SELECT COUNT(
+                DISTINCT file_id
+            ) AS total
+
+            FROM public.document_chunks
+
+            WHERE user_id = %s
+              AND folder_id = %s
+        """
+
+        with self.pool.connection() as connection:
+
+            with connection.cursor() as cursor:
+
+                cursor.execute(
+                    sql,
+                    (
+                        user_id,
+                        folder_id,
+                    ),
+                )
+
+                row = cursor.fetchone()
+
+        return int(
+            row["total"]
+        )
+
+    # ==================================================
+    # FOLDER CHUNK COUNT
+    # ==================================================
+
+    def get_folder_chunk_count(
+        self,
+        user_id: str,
+        folder_id: str,
+    ) -> int:
+
+        return self.count(
+            user_id=user_id,
+            folder_id=folder_id,
         )
 
     # ==================================================
@@ -530,6 +668,12 @@ class VectorStore:
 
             raise ValueError(
                 "folder_id is required."
+            )
+
+        if not file_id:
+
+            raise ValueError(
+                "file_id is required."
             )
 
         sql = """
@@ -621,6 +765,21 @@ class VectorStore:
         folder_id: str,
     ) -> bool:
 
+        if not user_id:
+            raise ValueError(
+                "user_id is required."
+            )
+
+        if not folder_id:
+            raise ValueError(
+                "folder_id is required."
+            )
+
+        if not file_id:
+            raise ValueError(
+                "file_id is required."
+            )
+
         sql = """
             SELECT 1
             FROM public.document_chunks
@@ -661,6 +820,21 @@ class VectorStore:
         folder_id: str,
     ):
 
+        if not user_id:
+            raise ValueError(
+                "user_id is required."
+            )
+
+        if not folder_id:
+            raise ValueError(
+                "folder_id is required."
+            )
+
+        if not file_id:
+            raise ValueError(
+                "file_id is required."
+            )
+
         sql = """
             SELECT modified_time
 
@@ -691,7 +865,6 @@ class VectorStore:
                 row = cursor.fetchone()
 
         if not row:
-
             return None
 
         return row["modified_time"]
@@ -708,15 +881,18 @@ class VectorStore:
     ):
 
         if not user_id:
-
             raise ValueError(
                 "user_id is required."
             )
 
         if not folder_id:
-
             raise ValueError(
                 "folder_id is required."
+            )
+
+        if not file_id:
+            raise ValueError(
+                "file_id is required."
             )
 
         sql = """
@@ -740,7 +916,60 @@ class VectorStore:
                     ),
                 )
 
+                deleted_chunks = (
+                    cursor.rowcount
+                )
+
             connection.commit()
+
+        return deleted_chunks
+
+    # ==================================================
+    # DELETE ENTIRE FOLDER
+    # ==================================================
+
+    def delete_folder(
+        self,
+        user_id: str,
+        folder_id: str,
+    ) -> int:
+
+        if not user_id:
+            raise ValueError(
+                "user_id is required."
+            )
+
+        if not folder_id:
+            raise ValueError(
+                "folder_id is required."
+            )
+
+        sql = """
+            DELETE FROM public.document_chunks
+
+            WHERE user_id = %s
+              AND folder_id = %s
+        """
+
+        with self.pool.connection() as connection:
+
+            with connection.cursor() as cursor:
+
+                cursor.execute(
+                    sql,
+                    (
+                        user_id,
+                        folder_id,
+                    ),
+                )
+
+                deleted_chunks = (
+                    cursor.rowcount
+                )
+
+            connection.commit()
+
+        return deleted_chunks
 
     # ==================================================
     # GET INDEXED FILES
@@ -755,21 +984,24 @@ class VectorStore:
         if not user_id:
 
             raise ValueError(
-                "user_id is required for indexed files."
+                "user_id is required for "
+                "indexed files."
             )
 
         if not folder_id:
 
             raise ValueError(
-                "folder_id is required for indexed files."
+                "folder_id is required for "
+                "indexed files."
             )
 
         sql = """
             SELECT DISTINCT ON (file_id)
                 file_id,
                 file_name,
-                modified_time,
-                path
+                path,
+                mime_type,
+                modified_time
 
             FROM public.document_chunks
 
@@ -810,9 +1042,77 @@ class VectorStore:
 
                 "path":
                     row["path"],
+
+                "mime_type":
+                    row["mime_type"],
             }
 
         return indexed_files
+
+    # ==================================================
+    # GET INDEXED FILE DETAILS
+    # ==================================================
+
+    def get_indexed_file(
+        self,
+        user_id: str,
+        folder_id: str,
+        file_id: str,
+    ):
+
+        if not user_id:
+            raise ValueError(
+                "user_id is required."
+            )
+
+        if not folder_id:
+            raise ValueError(
+                "folder_id is required."
+            )
+
+        if not file_id:
+            raise ValueError(
+                "file_id is required."
+            )
+
+        sql = """
+            SELECT
+                file_id,
+                file_name,
+                path,
+                mime_type,
+                modified_time,
+
+                COUNT(*) AS chunk_count
+
+            FROM public.document_chunks
+
+            WHERE user_id = %s
+              AND folder_id = %s
+              AND file_id = %s
+
+            GROUP BY
+                file_id,
+                file_name,
+                path,
+                mime_type,
+                modified_time
+        """
+
+        with self.pool.connection() as connection:
+
+            with connection.cursor() as cursor:
+
+                cursor.execute(
+                    sql,
+                    (
+                        user_id,
+                        folder_id,
+                        file_id,
+                    ),
+                )
+
+                return cursor.fetchone()
 
     # ==================================================
     # USER FILE COUNT
@@ -822,6 +1122,11 @@ class VectorStore:
         self,
         user_id: str,
     ) -> int:
+
+        if not user_id:
+            raise ValueError(
+                "user_id is required."
+            )
 
         sql = """
             SELECT COUNT(
@@ -874,7 +1179,6 @@ class VectorStore:
     ):
 
         if not ids:
-
             return
 
         if not user_id:
@@ -936,8 +1240,12 @@ class VectorStore:
                 "metadatas": [],
             }
 
+        if radius < 0:
+
+            radius = 0
+
         # ------------------------------------------
-        # Build target chunk IDs
+        # BUILD TARGET CHUNK IDS
         # ------------------------------------------
 
         targets = set()
@@ -968,8 +1276,16 @@ class VectorStore:
             targets
         )
 
+        if not chunk_list:
+
+            return {
+                "ids": [],
+                "documents": [],
+                "metadatas": [],
+            }
+
         # ------------------------------------------
-        # Query same user's same file
+        # SAME USER + SAME FILE
         # ------------------------------------------
 
         sql = """

@@ -36,6 +36,9 @@ from app.api.routes.conversations import (
     router as conversations_router,
 )
 
+from app.api.routes.folders import (
+    router as folders_router,
+)
 
 # ==================================================
 # APPLICATION
@@ -162,6 +165,9 @@ app.include_router(
     conversations_router
 )
 
+app.include_router(
+    folders_router
+)
 
 # ==================================================
 # ROOT

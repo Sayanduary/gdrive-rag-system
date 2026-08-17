@@ -12,8 +12,6 @@ import {
 
 import { FcGoogle } from "react-icons/fc";
 
-const STORAGE_KEY = "gdrive_rag_session";
-
 function Login({ user, checkingAuth }) {
   const navigate = useNavigate();
 
@@ -26,34 +24,10 @@ function Login({ user, checkingAuth }) {
       return;
     }
 
-    try {
-      const savedSession = localStorage.getItem(STORAGE_KEY);
+    // Dashboard is now the landing page
+    // for every authenticated user.
 
-      if (savedSession) {
-        const parsedSession = JSON.parse(savedSession);
-
-        /*
-         * User has already analyzed a folder.
-         *
-         * Chat history does NOT matter.
-         */
-
-        if (parsedSession?.folderUrl && parsedSession?.analysis) {
-          navigate("/chat", {
-            replace: true,
-          });
-
-          return;
-        }
-      }
-    } catch (error) {
-      console.error("Failed to read saved session:", error);
-
-      localStorage.removeItem(STORAGE_KEY);
-    }
-
-    // No analyzed folder
-    navigate("/analyze", {
+    navigate("/dashboard", {
       replace: true,
     });
   }, [user, checkingAuth, navigate]);
@@ -103,13 +77,13 @@ function Login({ user, checkingAuth }) {
 
         <div className="relative flex flex-col items-center">
           <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-white/[0.09] bg-white/[0.035] shadow-2xl backdrop-blur-xl">
-            <FiFolder className="text-lg text-neutral-300" />
+            <FiDatabase className="text-lg text-neutral-300" />
           </div>
 
           <p className="mt-5 text-sm font-medium text-neutral-300">Zentra</p>
 
           <p className="mt-2 text-xs text-neutral-600">
-            Opening your workspace...
+            Opening your dashboard...
           </p>
         </div>
       </div>
@@ -337,8 +311,6 @@ function FeatureCard({ icon, title, description }) {
 function Background() {
   return (
     <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
-      {/* Grid */}
-
       <div
         className="absolute inset-0 opacity-[0.035]"
         style={{
@@ -357,31 +329,19 @@ function Background() {
         }}
       />
 
-      {/* Top glow */}
-
       <div className="absolute left-1/2 top-[-400px] h-[750px] w-[750px] -translate-x-1/2 rounded-full bg-white/[0.025] blur-[140px]" />
-
-      {/* Left glow */}
 
       <div className="absolute left-[-250px] top-[35%] h-[500px] w-[500px] rounded-full bg-white/[0.012] blur-[130px]" />
 
-      {/* Right glow */}
-
       <div className="absolute bottom-[-300px] right-[-150px] h-[550px] w-[550px] rounded-full bg-white/[0.012] blur-[130px]" />
-
-      {/* Floating document */}
 
       <div className="absolute left-[8%] top-[22%] hidden h-14 w-14 rotate-[-8deg] items-center justify-center rounded-2xl border border-white/[0.05] bg-white/[0.018] lg:flex">
         <FiFileText className="text-lg text-white/[0.15]" />
       </div>
 
-      {/* Floating search */}
-
       <div className="absolute right-[8%] top-[24%] hidden h-16 w-16 rotate-[8deg] items-center justify-center rounded-2xl border border-white/[0.05] bg-white/[0.018] lg:flex">
         <FiSearch className="text-xl text-white/[0.15]" />
       </div>
-
-      {/* Floating folder */}
 
       <div className="absolute bottom-[20%] left-[12%] hidden h-16 w-16 rotate-[5deg] items-center justify-center rounded-2xl border border-white/[0.05] bg-white/[0.018] lg:flex">
         <FiFolder className="text-xl text-white/[0.12]" />
