@@ -1,13 +1,5 @@
+.env
 .venv/
 __pycache__/
 *.pyc
-
-.env
-
-# Ignore runtime data directory (ChromaDB, downloads, memory.db)
 data/
-
-credentials/
-*.json
-
-.pytest_cache/
