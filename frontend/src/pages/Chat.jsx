@@ -16,16 +16,35 @@ import {
 import api from "../services/api";
 import Navbar from "../components/Navbar";
 
-const ACTIVE_CHAT_KEY = "gdrive_rag_active_conversation";
+// ==================================================
+// USER-SCOPED LOCAL STORAGE KEY
+// ==================================================
+
+function getActiveChatKey(user) {
+  const userId = user?.sub || user?.email || "anonymous";
+
+  return `gdrive_rag_active_conversation_${userId}`;
+}
+
+// ==================================================
+// CHAT COMPONENT
+// ==================================================
 
 function Chat({ user, onSyncAnotherFolder }) {
   const navigate = useNavigate();
+
+  // IMPORTANT:
+  // Every Google account gets its own
+  // active conversation localStorage key.
+
+  const activeChatKey = getActiveChatKey(user);
 
   // ==================================================
   // CHAT STATE
   // ==================================================
 
   const [question, setQuestion] = useState("");
+
   const [messages, setMessages] = useState([]);
 
   // ==================================================
@@ -33,6 +52,7 @@ function Chat({ user, onSyncAnotherFolder }) {
   // ==================================================
 
   const [conversations, setConversations] = useState([]);
+
   const [activeConversationId, setActiveConversationId] = useState(null);
 
   // ==================================================
@@ -40,7 +60,9 @@ function Chat({ user, onSyncAnotherFolder }) {
   // ==================================================
 
   const [loading, setLoading] = useState(false);
+
   const [loadingConversations, setLoadingConversations] = useState(true);
+
   const [error, setError] = useState("");
 
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
@@ -50,9 +72,11 @@ function Chat({ user, onSyncAnotherFolder }) {
   // ==================================================
 
   const requestInFlightRef = useRef(false);
+
   const pendingSourcesRef = useRef([]);
 
   const messagesContainerRef = useRef(null);
+
   const messagesEndRef = useRef(null);
 
   // ==================================================
@@ -93,7 +117,7 @@ function Chat({ user, onSyncAnotherFolder }) {
   }, []);
 
   // ==================================================
-  // PREVENT BODY SCROLL WHEN MOBILE SIDEBAR IS OPEN
+  // PREVENT BODY SCROLL
   // ==================================================
 
   useEffect(() => {
@@ -131,16 +155,21 @@ function Chat({ user, onSyncAnotherFolder }) {
 
         setConversations(items);
 
+        // No conversations
         if (items.length === 0) {
           setActiveConversationId(null);
+
           setMessages([]);
 
-          localStorage.removeItem(ACTIVE_CHAT_KEY);
+          localStorage.removeItem(activeChatKey);
 
           return;
         }
 
-        const savedId = localStorage.getItem(ACTIVE_CHAT_KEY);
+        // Restore this specific user's
+        // last active conversation.
+
+        const savedId = localStorage.getItem(activeChatKey);
 
         const savedConversation = items.find(
           (item) => String(item.id) === savedId,
@@ -167,7 +196,7 @@ function Chat({ user, onSyncAnotherFolder }) {
     return () => {
       ignore = true;
     };
-  }, []);
+  }, [activeChatKey]);
 
   // ==================================================
   // LOAD ONE CONVERSATION
@@ -187,7 +216,7 @@ function Chat({ user, onSyncAnotherFolder }) {
 
       setActiveConversationId(conversationId);
 
-      localStorage.setItem(ACTIVE_CHAT_KEY, String(conversationId));
+      localStorage.setItem(activeChatKey, String(conversationId));
     } catch (error) {
       setError(error.response?.data?.detail || "Failed to load conversation.");
     }
@@ -225,7 +254,7 @@ function Chat({ user, onSyncAnotherFolder }) {
 
       setActiveConversationId(conversationId);
 
-      localStorage.setItem(ACTIVE_CHAT_KEY, String(conversationId));
+      localStorage.setItem(activeChatKey, String(conversationId));
 
       setMessages([]);
       setQuestion("");
@@ -238,7 +267,7 @@ function Chat({ user, onSyncAnotherFolder }) {
   }
 
   // ==================================================
-  // GENERATE CHAT TITLE
+  // GENERATE TITLE
   // ==================================================
 
   function generateChatTitle(text) {
@@ -292,12 +321,13 @@ function Chat({ user, onSyncAnotherFolder }) {
       setConversations(remaining);
 
       if (activeConversationId === conversationId) {
-        localStorage.removeItem(ACTIVE_CHAT_KEY);
+        localStorage.removeItem(activeChatKey);
 
         if (remaining.length > 0) {
           await loadConversation(remaining[0].id);
         } else {
           setActiveConversationId(null);
+
           setMessages([]);
         }
       }
@@ -364,7 +394,7 @@ function Chat({ user, onSyncAnotherFolder }) {
   }
 
   // ==================================================
-  // SSE EVENT PARSER
+  // SSE PARSER
   // ==================================================
 
   function parseSSEBlock(block) {
@@ -421,6 +451,10 @@ function Chat({ user, onSyncAnotherFolder }) {
 
     const generatedTitle = generateChatTitle(currentQuestion);
 
+    // ----------------------------------------------
+    // Optimistically update title
+    // ----------------------------------------------
+
     if (isFirstMessage && activeConversationId) {
       setConversations((previous) =>
         previous.map((conversation) =>
@@ -435,6 +469,10 @@ function Chat({ user, onSyncAnotherFolder }) {
 
       updateChatTitle(activeConversationId, generatedTitle);
     }
+
+    // ----------------------------------------------
+    // Add optimistic messages
+    // ----------------------------------------------
 
     setMessages((previous) => [
       ...previous,
@@ -455,6 +493,10 @@ function Chat({ user, onSyncAnotherFolder }) {
     setQuestion("");
 
     try {
+      // IMPORTANT:
+      // Use Vercel same-origin proxy.
+      // Do not use VITE_API_BASE_URL here.
+
       const response = await fetch("/api/query/stream", {
         method: "POST",
 
@@ -462,11 +504,13 @@ function Chat({ user, onSyncAnotherFolder }) {
 
         headers: {
           "Content-Type": "application/json",
+
           Accept: "text/event-stream",
         },
 
         body: JSON.stringify({
           question: currentQuestion,
+
           conversation_id: activeConversationId,
         }),
       });
@@ -479,7 +523,7 @@ function Chat({ user, onSyncAnotherFolder }) {
 
           detail = data.detail || detail;
         } catch {
-          // Ignore parsing error.
+          // Ignore parsing errors.
         }
 
         throw new Error(detail);
@@ -494,6 +538,10 @@ function Chat({ user, onSyncAnotherFolder }) {
       const decoder = new TextDecoder();
 
       let buffer = "";
+
+      // ----------------------------------------------
+      // Read SSE stream
+      // ----------------------------------------------
 
       while (true) {
         const { value, done } = await reader.read();
@@ -519,7 +567,9 @@ function Chat({ user, onSyncAnotherFolder }) {
 
           const { eventName, data } = parsed;
 
+          // ==========================================
           // METADATA
+          // ==========================================
 
           if (eventName === "metadata") {
             const conversationId = data.conversation_id;
@@ -527,7 +577,10 @@ function Chat({ user, onSyncAnotherFolder }) {
             if (conversationId) {
               setActiveConversationId(conversationId);
 
-              localStorage.setItem(ACTIVE_CHAT_KEY, String(conversationId));
+              localStorage.setItem(activeChatKey, String(conversationId));
+
+              // New conversation created by
+              // the backend during the query.
 
               if (isFirstMessage && conversationId) {
                 setConversations((previous) =>
@@ -551,7 +604,9 @@ function Chat({ user, onSyncAnotherFolder }) {
             continue;
           }
 
+          // ==========================================
           // TOKEN
+          // ==========================================
 
           if (eventName === "token") {
             const token = data.content || "";
@@ -581,7 +636,9 @@ function Chat({ user, onSyncAnotherFolder }) {
             continue;
           }
 
+          // ==========================================
           // ERROR
+          // ==========================================
 
           if (eventName === "error") {
             throw new Error(
@@ -589,7 +646,9 @@ function Chat({ user, onSyncAnotherFolder }) {
             );
           }
 
+          // ==========================================
           // DONE
+          // ==========================================
 
           if (eventName === "done") {
             const finalSources = pendingSourcesRef.current || [];
@@ -605,6 +664,7 @@ function Chat({ user, onSyncAnotherFolder }) {
 
               updated[lastIndex] = {
                 ...updated[lastIndex],
+
                 sources: finalSources,
               };
 
@@ -618,6 +678,9 @@ function Chat({ user, onSyncAnotherFolder }) {
         }
       }
     } catch (error) {
+      // Remove optimistic user +
+      // assistant messages.
+
       setMessages((previous) => previous.slice(0, -2));
 
       pendingSourcesRef.current = [];
@@ -667,7 +730,7 @@ function Chat({ user, onSyncAnotherFolder }) {
   }
 
   // ==================================================
-  // MOBILE: CREATE NEW CHAT
+  // MOBILE: NEW CHAT
   // ==================================================
 
   async function handleMobileNewChat() {
@@ -730,8 +793,6 @@ function Chat({ user, onSyncAnotherFolder }) {
         ================================================== */}
 
         <aside className="hidden w-[280px] shrink-0 border-r border-white/[0.06] bg-[#0d0d0d]/90 backdrop-blur-2xl lg:flex lg:flex-col">
-          {/* Sidebar Header */}
-
           <div className="border-b border-white/[0.06] p-4">
             <div className="flex items-center justify-between">
               <div>
@@ -774,8 +835,6 @@ function Chat({ user, onSyncAnotherFolder }) {
             </div>
           </div>
 
-          {/* Conversation List */}
-
           <div className="chat-sidebar-scrollbar flex-1 overflow-y-auto p-3">
             {loadingConversations ? (
               <div className="rounded-xl border border-white/[0.05] bg-white/[0.015] px-3 py-4 text-xs text-neutral-600">
@@ -810,8 +869,6 @@ function Chat({ user, onSyncAnotherFolder }) {
                           }
                         `}
                     >
-                      {/* Conversation */}
-
                       <button
                         type="button"
                         onClick={() => loadConversation(conversation.id)}
@@ -861,8 +918,6 @@ function Chat({ user, onSyncAnotherFolder }) {
                         </div>
                       </button>
 
-                      {/* Rename */}
-
                       <button
                         type="button"
                         onClick={() => renameConversation(conversation)}
@@ -885,8 +940,6 @@ function Chat({ user, onSyncAnotherFolder }) {
                       >
                         <FiEdit2 className="text-xs" />
                       </button>
-
-                      {/* Delete */}
 
                       <button
                         type="button"
@@ -917,8 +970,6 @@ function Chat({ user, onSyncAnotherFolder }) {
               </div>
             )}
           </div>
-
-          {/* New Conversation */}
 
           <div className="border-t border-white/[0.06] p-3">
             <button
@@ -960,8 +1011,6 @@ function Chat({ user, onSyncAnotherFolder }) {
 
         {mobileSidebarOpen && (
           <div className="fixed inset-x-0 bottom-0 top-[84px] z-[60] lg:hidden">
-            {/* Backdrop */}
-
             <button
               type="button"
               aria-label="Close chat history"
@@ -974,8 +1023,6 @@ function Chat({ user, onSyncAnotherFolder }) {
                 backdrop-blur-[3px]
               "
             />
-
-            {/* Drawer */}
 
             <aside
               className="
@@ -990,8 +1037,6 @@ function Chat({ user, onSyncAnotherFolder }) {
                 shadow-2xl
               "
             >
-              {/* Drawer Header */}
-
               <div className="flex items-center justify-between border-b border-white/[0.06] bg-white/[0.015] p-4">
                 <div>
                   <p className="text-sm font-medium text-neutral-200">
@@ -1027,8 +1072,6 @@ function Chat({ user, onSyncAnotherFolder }) {
                 </button>
               </div>
 
-              {/* New Conversation */}
-
               <div className="border-b border-white/[0.06] p-3">
                 <button
                   type="button"
@@ -1060,8 +1103,6 @@ function Chat({ user, onSyncAnotherFolder }) {
                   New conversation
                 </button>
               </div>
-
-              {/* Mobile Conversation List */}
 
               <div className="chat-sidebar-scrollbar flex-1 overflow-y-auto p-3">
                 {loadingConversations ? (
@@ -1185,8 +1226,6 @@ function Chat({ user, onSyncAnotherFolder }) {
         ================================================== */}
 
         <main className="relative flex h-full min-w-0 flex-1 flex-col overflow-hidden bg-[#090909]">
-          {/* Message Scroll */}
-
           <div className="min-h-0 flex-1 overflow-hidden px-4 sm:px-6">
             <div
               ref={messagesContainerRef}
@@ -1201,13 +1240,13 @@ function Chat({ user, onSyncAnotherFolder }) {
                 sm:py-8
               "
             >
-              {/* Empty State */}
+              {/* ==================================================
+                  EMPTY STATE
+              ================================================== */}
 
               {messages.length === 0 && !loading && !error ? (
                 <div className="flex min-h-[calc(100vh-260px)] items-center justify-center px-2">
                   <div className="w-full max-w-2xl text-center">
-                    {/* Hero Icon */}
-
                     <div className="relative mx-auto mb-7 flex h-16 w-16 items-center justify-center">
                       <div className="absolute inset-0 rounded-2xl bg-white/[0.025] blur-xl" />
 
@@ -1228,8 +1267,6 @@ function Chat({ user, onSyncAnotherFolder }) {
                       Ask questions about the documents in your Google Drive
                       knowledge base.
                     </p>
-
-                    {/* Suggestion Cards */}
 
                     <div className="mt-9 grid grid-cols-1 gap-3 sm:grid-cols-2">
                       <button
@@ -1316,7 +1353,9 @@ function Chat({ user, onSyncAnotherFolder }) {
                 </div>
               ) : (
                 <div className="space-y-8 pb-4">
-                  {/* Messages */}
+                  {/* ==================================================
+                      MESSAGES
+                  ================================================== */}
 
                   {messages.map((message, index) => {
                     const isLastMessage = index === messages.length - 1;
@@ -1350,12 +1389,10 @@ function Chat({ user, onSyncAnotherFolder }) {
                             </div>
                           </div>
                         ) : (
-                          /* ASSISTANT */
+                          // ASSISTANT
 
                           <div className="w-full">
                             <div className="flex items-start gap-3 sm:gap-4">
-                              {/* AI Icon */}
-
                               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.035] shadow-sm">
                                 <span className="text-[9px] font-semibold tracking-wide text-neutral-300">
                                   AI
@@ -1395,7 +1432,7 @@ function Chat({ user, onSyncAnotherFolder }) {
                                   </div>
                                 ) : null}
 
-                                {/* Sources */}
+                                {/* SOURCES */}
 
                                 {!isGenerating &&
                                   message.sources?.length > 0 && (
@@ -1468,7 +1505,7 @@ function Chat({ user, onSyncAnotherFolder }) {
                 </div>
               )}
 
-              {/* Error */}
+              {/* ERROR */}
 
               {error && (
                 <div className="mt-8 rounded-xl border border-red-500/[0.15] bg-red-500/[0.04] px-4 py-3 text-xs leading-5 text-red-400">

@@ -1,159 +1,127 @@
-import json
-import sqlite3
 from datetime import datetime, timezone
-from pathlib import Path
+from typing import Any
 
+from psycopg.rows import dict_row
+from psycopg_pool import ConnectionPool
 
-BASE_DIR = Path(__file__).resolve().parents[2]
-
-DATA_DIR = BASE_DIR / "data"
-
-DATABASE_PATH = DATA_DIR / "memory.db"
+from config import settings
 
 
 class ConversationMemory:
+    """
+    Persistent PostgreSQL conversation storage.
+
+    Uses the same Supabase PostgreSQL database as the
+    document_chunks / pgvector storage.
+    """
 
     def __init__(self):
+        if not settings.DATABASE_URL:
+            raise RuntimeError(
+                "DATABASE_URL is not configured."
+            )
 
-        DATA_DIR.mkdir(
-            parents=True,
-            exist_ok=True
-        )
-
-        self.connection = sqlite3.connect(
-            DATABASE_PATH,
-            check_same_thread=False
-        )
-
-        self.connection.row_factory = sqlite3.Row
-
-        # Enable foreign-key support.
-        self.connection.execute(
-            "PRAGMA foreign_keys = ON"
+        self.pool = ConnectionPool(
+            conninfo=settings.DATABASE_URL,
+            min_size=1,
+            max_size=5,
+            timeout=30,
+            kwargs={
+                "row_factory": dict_row,
+            },
         )
 
         self.create_tables()
 
     # ==================================================
-    # TABLES
+    # DATABASE INITIALIZATION
     # ==================================================
 
     def create_tables(self):
+        with self.pool.connection() as connection:
+            with connection.cursor() as cursor:
 
-        # ----------------------------------------------
-        # Create conversations table.
-        #
-        # folder_id is included for new databases.
-        # ----------------------------------------------
+                cursor.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS public.conversations (
+                        id BIGSERIAL PRIMARY KEY,
 
-        self.connection.execute(
-            """
-            CREATE TABLE IF NOT EXISTS conversations (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id TEXT NOT NULL,
-                folder_id TEXT,
-                title TEXT NOT NULL,
-                created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL
-            )
-            """
-        )
+                        user_id TEXT NOT NULL,
 
-        # ----------------------------------------------
-        # Create messages table.
-        # ----------------------------------------------
+                        folder_id TEXT,
 
-        self.connection.execute(
-            """
-            CREATE TABLE IF NOT EXISTS messages (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                conversation_id INTEGER NOT NULL,
-                role TEXT NOT NULL,
-                content TEXT NOT NULL,
-                sources TEXT,
-                created_at TEXT NOT NULL,
+                        title TEXT NOT NULL DEFAULT 'New Chat',
 
-                FOREIGN KEY (conversation_id)
-                REFERENCES conversations(id)
-                ON DELETE CASCADE
-            )
-            """
-        )
+                        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
-        self.connection.commit()
+                        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                    )
+                    """
+                )
 
-        # ----------------------------------------------
-        # Migrate old database BEFORE creating indexes.
-        # ----------------------------------------------
+                cursor.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS public.messages (
+                        id BIGSERIAL PRIMARY KEY,
 
-        self.migrate_tables()
+                        conversation_id BIGINT NOT NULL,
 
-        # ----------------------------------------------
-        # Indexes
-        # ----------------------------------------------
+                        role TEXT NOT NULL,
 
-        self.connection.execute(
-            """
-            CREATE INDEX IF NOT EXISTS
-            idx_conversations_user
-            ON conversations(user_id)
-            """
-        )
+                        content TEXT NOT NULL,
 
-        self.connection.execute(
-            """
-            CREATE INDEX IF NOT EXISTS
-            idx_conversations_folder
-            ON conversations(folder_id)
-            """
-        )
+                        sources JSONB NOT NULL DEFAULT '[]'::jsonb,
 
-        self.connection.execute(
-            """
-            CREATE INDEX IF NOT EXISTS
-            idx_messages_conversation
-            ON messages(conversation_id)
-            """
-        )
+                        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
-        self.connection.commit()
+                        CONSTRAINT fk_messages_conversation
+                            FOREIGN KEY (conversation_id)
+                            REFERENCES public.conversations(id)
+                            ON DELETE CASCADE
+                    )
+                    """
+                )
 
-    # ==================================================
-    # DATABASE MIGRATION
-    # ==================================================
+                # ------------------------------------------
+                # Indexes
+                # ------------------------------------------
 
-    def migrate_tables(self):
+                cursor.execute(
+                    """
+                    CREATE INDEX IF NOT EXISTS
+                    idx_conversations_user_id
+                    ON public.conversations(user_id)
+                    """
+                )
 
-        columns = self.connection.execute(
-            """
-            PRAGMA table_info(conversations)
-            """
-        ).fetchall()
+                cursor.execute(
+                    """
+                    CREATE INDEX IF NOT EXISTS
+                    idx_conversations_user_updated
+                    ON public.conversations(
+                        user_id,
+                        updated_at DESC
+                    )
+                    """
+                )
 
-        column_names = {
-            column["name"]
-            for column in columns
-        }
+                cursor.execute(
+                    """
+                    CREATE INDEX IF NOT EXISTS
+                    idx_conversations_folder_id
+                    ON public.conversations(folder_id)
+                    """
+                )
 
-        # ----------------------------------------------
-        # Add folder_id to old database
-        # ----------------------------------------------
+                cursor.execute(
+                    """
+                    CREATE INDEX IF NOT EXISTS
+                    idx_messages_conversation_id
+                    ON public.messages(conversation_id)
+                    """
+                )
 
-        if "folder_id" not in column_names:
-
-            print(
-                "Migrating conversations table: "
-                "adding folder_id..."
-            )
-
-            self.connection.execute(
-                """
-                ALTER TABLE conversations
-                ADD COLUMN folder_id TEXT
-                """
-            )
-
-            self.connection.commit()
+            connection.commit()
 
     # ==================================================
     # CREATE CONVERSATION
@@ -163,36 +131,53 @@ class ConversationMemory:
         self,
         user_id: str,
         folder_id: str | None = None,
-        title: str = "New Chat"
+        title: str = "New Chat",
     ) -> int:
+
+        if not user_id:
+            raise ValueError(
+                "user_id is required."
+            )
 
         now = datetime.now(
             timezone.utc
-        ).isoformat()
-
-        cursor = self.connection.execute(
-            """
-            INSERT INTO conversations (
-                user_id,
-                folder_id,
-                title,
-                created_at,
-                updated_at
-            )
-            VALUES (?, ?, ?, ?, ?)
-            """,
-            (
-                user_id,
-                folder_id,
-                title,
-                now,
-                now
-            )
         )
 
-        self.connection.commit()
+        with self.pool.connection() as connection:
+            with connection.cursor() as cursor:
 
-        return cursor.lastrowid
+                cursor.execute(
+                    """
+                    INSERT INTO public.conversations (
+                        user_id,
+                        folder_id,
+                        title,
+                        created_at,
+                        updated_at
+                    )
+                    VALUES (
+                        %s,
+                        %s,
+                        %s,
+                        %s,
+                        %s
+                    )
+                    RETURNING id
+                    """,
+                    (
+                        user_id,
+                        folder_id,
+                        title,
+                        now,
+                        now,
+                    ),
+                )
+
+                row = cursor.fetchone()
+
+            connection.commit()
+
+        return int(row["id"])
 
     # ==================================================
     # ADD MESSAGE
@@ -203,48 +188,94 @@ class ConversationMemory:
         conversation_id: int,
         role: str,
         content: str,
-        sources: list | None = None
+        sources: list | None = None,
     ):
+        if not conversation_id:
+            raise ValueError(
+                "conversation_id is required."
+            )
+
+        if not role:
+            raise ValueError(
+                "role is required."
+            )
+
+        if content is None:
+            content = ""
 
         now = datetime.now(
             timezone.utc
-        ).isoformat()
-
-        self.connection.execute(
-            """
-            INSERT INTO messages (
-                conversation_id,
-                role,
-                content,
-                sources,
-                created_at
-            )
-            VALUES (?, ?, ?, ?, ?)
-            """,
-            (
-                conversation_id,
-                role,
-                content,
-                json.dumps(
-                    sources or []
-                ),
-                now
-            )
         )
 
-        self.connection.execute(
-            """
-            UPDATE conversations
-            SET updated_at = ?
-            WHERE id = ?
-            """,
-            (
-                now,
-                conversation_id
-            )
-        )
+        with self.pool.connection() as connection:
+            with connection.cursor() as cursor:
 
-        self.connection.commit()
+                # --------------------------------------
+                # Insert message only if the conversation
+                # exists.
+                # --------------------------------------
+
+                cursor.execute(
+                    """
+                    SELECT id
+                    FROM public.conversations
+                    WHERE id = %s
+                    """,
+                    (conversation_id,),
+                )
+
+                conversation = cursor.fetchone()
+
+                if not conversation:
+                    raise ValueError(
+                        "Conversation not found."
+                    )
+
+                cursor.execute(
+                    """
+                    INSERT INTO public.messages (
+                        conversation_id,
+                        role,
+                        content,
+                        sources,
+                        created_at
+                    )
+                    VALUES (
+                        %s,
+                        %s,
+                        %s,
+                        %s::jsonb,
+                        %s
+                    )
+                    """,
+                    (
+                        conversation_id,
+                        role,
+                        content,
+                        _json_dumps(
+                            sources or []
+                        ),
+                        now,
+                    ),
+                )
+
+                # --------------------------------------
+                # Update conversation timestamp
+                # --------------------------------------
+
+                cursor.execute(
+                    """
+                    UPDATE public.conversations
+                    SET updated_at = %s
+                    WHERE id = %s
+                    """,
+                    (
+                        now,
+                        conversation_id,
+                    ),
+                )
+
+            connection.commit()
 
     # ==================================================
     # GET MESSAGES
@@ -253,49 +284,52 @@ class ConversationMemory:
     def get_messages(
         self,
         conversation_id: int,
-        limit: int = 30
+        limit: int = 30,
     ):
+        with self.pool.connection() as connection:
+            with connection.cursor() as cursor:
 
-        rows = self.connection.execute(
-            """
-            SELECT
-                role,
-                content,
-                sources,
-                created_at
-            FROM messages
-            WHERE conversation_id = ?
-            ORDER BY id DESC
-            LIMIT ?
-            """,
-            (
-                conversation_id,
-                limit
-            )
-        ).fetchall()
+                cursor.execute(
+                    """
+                    SELECT
+                        role,
+                        content,
+                        sources,
+                        created_at
+                    FROM public.messages
+                    WHERE conversation_id = %s
+                    ORDER BY id DESC
+                    LIMIT %s
+                    """,
+                    (
+                        conversation_id,
+                        limit,
+                    ),
+                )
+
+                rows = cursor.fetchall()
 
         messages = []
 
         for row in reversed(rows):
 
-            try:
-                sources = json.loads(
-                    row["sources"] or "[]"
-                )
+            sources = row["sources"]
 
-            except (
-                json.JSONDecodeError,
-                TypeError
-            ):
-
+            if sources is None:
                 sources = []
 
-            messages.append({
-                "role": row["role"],
-                "content": row["content"],
-                "sources": sources,
-                "created_at": row["created_at"]
-            })
+            messages.append(
+                {
+                    "role": row["role"],
+                    "content": row["content"],
+                    "sources": sources,
+                    "created_at": (
+                        row["created_at"].isoformat()
+                        if row["created_at"]
+                        else None
+                    ),
+                }
+            )
 
         return messages
 
@@ -305,28 +339,49 @@ class ConversationMemory:
 
     def get_user_conversations(
         self,
-        user_id: str
+        user_id: str,
     ):
-
-        rows = self.connection.execute(
-            """
-            SELECT
-                id,
-                folder_id,
-                title,
-                created_at,
-                updated_at
-            FROM conversations
-            WHERE user_id = ?
-            ORDER BY updated_at DESC
-            """,
-            (
-                user_id,
+        if not user_id:
+            raise ValueError(
+                "user_id is required."
             )
-        ).fetchall()
+
+        with self.pool.connection() as connection:
+            with connection.cursor() as cursor:
+
+                cursor.execute(
+                    """
+                    SELECT
+                        id,
+                        folder_id,
+                        title,
+                        created_at,
+                        updated_at
+                    FROM public.conversations
+                    WHERE user_id = %s
+                    ORDER BY updated_at DESC
+                    """,
+                    (user_id,),
+                )
+
+                rows = cursor.fetchall()
 
         return [
-            dict(row)
+            {
+                "id": row["id"],
+                "folder_id": row["folder_id"],
+                "title": row["title"],
+                "created_at": (
+                    row["created_at"].isoformat()
+                    if row["created_at"]
+                    else None
+                ),
+                "updated_at": (
+                    row["updated_at"].isoformat()
+                    if row["updated_at"]
+                    else None
+                ),
+            }
             for row in rows
         ]
 
@@ -337,22 +392,25 @@ class ConversationMemory:
     def get_conversation_folder(
         self,
         conversation_id: int,
-        user_id: str
+        user_id: str,
     ):
+        with self.pool.connection() as connection:
+            with connection.cursor() as cursor:
 
-        row = self.connection.execute(
-            """
-            SELECT
-                folder_id
-            FROM conversations
-            WHERE id = ?
-            AND user_id = ?
-            """,
-            (
-                conversation_id,
-                user_id
-            )
-        ).fetchone()
+                cursor.execute(
+                    """
+                    SELECT folder_id
+                    FROM public.conversations
+                    WHERE id = %s
+                      AND user_id = %s
+                    """,
+                    (
+                        conversation_id,
+                        user_id,
+                    ),
+                )
+
+                row = cursor.fetchone()
 
         if not row:
             return None
@@ -366,32 +424,51 @@ class ConversationMemory:
     def get_conversation(
         self,
         conversation_id: int,
-        user_id: str
+        user_id: str,
     ):
+        with self.pool.connection() as connection:
+            with connection.cursor() as cursor:
 
-        row = self.connection.execute(
-            """
-            SELECT
-                id,
-                user_id,
-                folder_id,
-                title,
-                created_at,
-                updated_at
-            FROM conversations
-            WHERE id = ?
-            AND user_id = ?
-            """,
-            (
-                conversation_id,
-                user_id
-            )
-        ).fetchone()
+                cursor.execute(
+                    """
+                    SELECT
+                        id,
+                        user_id,
+                        folder_id,
+                        title,
+                        created_at,
+                        updated_at
+                    FROM public.conversations
+                    WHERE id = %s
+                      AND user_id = %s
+                    """,
+                    (
+                        conversation_id,
+                        user_id,
+                    ),
+                )
+
+                row = cursor.fetchone()
 
         if not row:
             return None
 
-        return dict(row)
+        return {
+            "id": row["id"],
+            "user_id": row["user_id"],
+            "folder_id": row["folder_id"],
+            "title": row["title"],
+            "created_at": (
+                row["created_at"].isoformat()
+                if row["created_at"]
+                else None
+            ),
+            "updated_at": (
+                row["updated_at"].isoformat()
+                if row["updated_at"]
+                else None
+            ),
+        }
 
     # ==================================================
     # OWNERSHIP CHECK
@@ -400,22 +477,27 @@ class ConversationMemory:
     def conversation_belongs_to_user(
         self,
         conversation_id: int,
-        user_id: str
+        user_id: str,
     ) -> bool:
 
-        row = self.connection.execute(
-            """
-            SELECT
-                id
-            FROM conversations
-            WHERE id = ?
-            AND user_id = ?
-            """,
-            (
-                conversation_id,
-                user_id
-            )
-        ).fetchone()
+        with self.pool.connection() as connection:
+            with connection.cursor() as cursor:
+
+                cursor.execute(
+                    """
+                    SELECT 1
+                    FROM public.conversations
+                    WHERE id = %s
+                      AND user_id = %s
+                    LIMIT 1
+                    """,
+                    (
+                        conversation_id,
+                        user_id,
+                    ),
+                )
+
+                row = cursor.fetchone()
 
         return row is not None
 
@@ -427,31 +509,38 @@ class ConversationMemory:
         self,
         conversation_id: int,
         user_id: str,
-        title: str
+        title: str,
     ):
+        if not title:
+            raise ValueError(
+                "title is required."
+            )
 
         now = datetime.now(
             timezone.utc
-        ).isoformat()
-
-        self.connection.execute(
-            """
-            UPDATE conversations
-            SET
-                title = ?,
-                updated_at = ?
-            WHERE id = ?
-            AND user_id = ?
-            """,
-            (
-                title,
-                now,
-                conversation_id,
-                user_id
-            )
         )
 
-        self.connection.commit()
+        with self.pool.connection() as connection:
+            with connection.cursor() as cursor:
+
+                cursor.execute(
+                    """
+                    UPDATE public.conversations
+                    SET
+                        title = %s,
+                        updated_at = %s
+                    WHERE id = %s
+                      AND user_id = %s
+                    """,
+                    (
+                        title,
+                        now,
+                        conversation_id,
+                        user_id,
+                    ),
+                )
+
+            connection.commit()
 
     # ==================================================
     # DELETE CONVERSATION
@@ -460,22 +549,28 @@ class ConversationMemory:
     def delete_conversation(
         self,
         conversation_id: int,
-        user_id: str
+        user_id: str,
     ):
+        with self.pool.connection() as connection:
+            with connection.cursor() as cursor:
 
-        self.connection.execute(
-            """
-            DELETE FROM conversations
-            WHERE id = ?
-            AND user_id = ?
-            """,
-            (
-                conversation_id,
-                user_id
-            )
-        )
+                cursor.execute(
+                    """
+                    DELETE FROM public.conversations
+                    WHERE id = %s
+                      AND user_id = %s
+                    """,
+                    (
+                        conversation_id,
+                        user_id,
+                    ),
+                )
 
-        self.connection.commit()
+                deleted = cursor.rowcount
+
+            connection.commit()
+
+        return deleted > 0
 
     # ==================================================
     # UPDATE CONVERSATION FOLDER
@@ -485,26 +580,50 @@ class ConversationMemory:
         self,
         conversation_id: int,
         user_id: str,
-        folder_id: str
+        folder_id: str,
     ):
-
-        self.connection.execute(
-            """
-            UPDATE conversations
-            SET
-                folder_id = ?,
-                updated_at = ?
-            WHERE id = ?
-            AND user_id = ?
-            """,
-            (
-                folder_id,
-                datetime.now(
-                    timezone.utc
-                ).isoformat(),
-                conversation_id,
-                user_id
-            )
+        now = datetime.now(
+            timezone.utc
         )
 
-        self.connection.commit()
+        with self.pool.connection() as connection:
+            with connection.cursor() as cursor:
+
+                cursor.execute(
+                    """
+                    UPDATE public.conversations
+                    SET
+                        folder_id = %s,
+                        updated_at = %s
+                    WHERE id = %s
+                      AND user_id = %s
+                    """,
+                    (
+                        folder_id,
+                        now,
+                        conversation_id,
+                        user_id,
+                    ),
+                )
+
+            connection.commit()
+
+    # ==================================================
+    # CLOSE
+    # ==================================================
+
+    def close(self):
+        self.pool.close()
+
+
+# ======================================================
+# JSON HELPER
+# ======================================================
+
+def _json_dumps(value: Any) -> str:
+    import json
+
+    return json.dumps(
+        value,
+        ensure_ascii=False,
+    )
