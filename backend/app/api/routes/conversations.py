@@ -2,23 +2,34 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 from app.services.memory import ConversationMemory
+from app.services.analyzed_folders import (
+    AnalyzedFolderService,
+)
 
 
 router = APIRouter(
     prefix="/api/conversations",
-    tags=["Conversations"]
+    tags=["Conversations"],
 )
 
 
 memory = ConversationMemory()
+
+folder_service = (
+    AnalyzedFolderService()
+)
 
 
 class RenameConversationRequest(BaseModel):
     title: str
 
 
+# ==================================================
+# USER ID
+# ==================================================
+
 def get_user_id(
-    request: Request
+    request: Request,
 ) -> str:
 
     user = request.session.get(
@@ -28,7 +39,7 @@ def get_user_id(
     if not user:
         raise HTTPException(
             status_code=401,
-            detail="User is not authenticated."
+            detail="User is not authenticated.",
         )
 
     user_id = user.get("sub")
@@ -36,7 +47,7 @@ def get_user_id(
     if not user_id:
         raise HTTPException(
             status_code=401,
-            detail="Google user ID is missing."
+            detail="Google user ID is missing.",
         )
 
     return user_id
@@ -48,31 +59,62 @@ def get_user_id(
 
 @router.post("")
 def create_conversation(
-    request: Request
+    request: Request,
 ):
-
     user_id = get_user_id(request)
 
-    # New conversations created explicitly from
-    # the UI should use the currently active folder.
+    # --------------------------------------------------
+    # First prefer the folder currently associated
+    # with this browser session.
+    # --------------------------------------------------
+
     folder_id = request.session.get(
         "active_folder_id"
     )
+
+    # --------------------------------------------------
+    # If the current session does not have a folder,
+    # recover the most recently analyzed folder for
+    # this authenticated user from PostgreSQL.
+    # --------------------------------------------------
+
+    if not folder_id:
+        folder_id = (
+            folder_service.get_latest_user_folder(
+                user_id
+            )
+        )
+
+    # --------------------------------------------------
+    # No analyzed folder exists for this user.
+    # --------------------------------------------------
 
     if not folder_id:
         raise HTTPException(
             status_code=400,
             detail=(
-                "No Drive folder has been analyzed "
-                "for this session."
-            )
+                "No analyzed Drive folder is "
+                "available for this user."
+            ),
         )
+
+    # --------------------------------------------------
+    # Restore the folder into the current session.
+    # --------------------------------------------------
+
+    request.session[
+        "active_folder_id"
+    ] = folder_id
+
+    # --------------------------------------------------
+    # Create persistent conversation.
+    # --------------------------------------------------
 
     conversation_id = (
         memory.create_conversation(
             user_id=user_id,
             folder_id=folder_id,
-            title="New Chat"
+            title="New Chat",
         )
     )
 
@@ -88,9 +130,8 @@ def create_conversation(
 
 @router.get("")
 def list_conversations(
-    request: Request
+    request: Request,
 ):
-
     user_id = get_user_id(request)
 
     conversations = (
@@ -111,33 +152,47 @@ def list_conversations(
 @router.get("/{conversation_id}")
 def get_conversation(
     conversation_id: int,
-    request: Request
+    request: Request,
 ):
-
     user_id = get_user_id(request)
+
+    # --------------------------------------------------
+    # Ownership check
+    # --------------------------------------------------
 
     if not memory.conversation_belongs_to_user(
         conversation_id,
-        user_id
+        user_id,
     ):
         raise HTTPException(
             status_code=404,
-            detail="Conversation not found."
+            detail="Conversation not found.",
         )
 
+    # --------------------------------------------------
+    # Messages
+    # --------------------------------------------------
+
     messages = memory.get_messages(
-        conversation_id=conversation_id
+        conversation_id=conversation_id,
     )
+
+    # --------------------------------------------------
+    # Folder associated with this conversation
+    # --------------------------------------------------
 
     folder_id = (
         memory.get_conversation_folder(
             conversation_id,
-            user_id
+            user_id,
         )
     )
 
-    # Restore the folder associated with this chat
-    # into the current session.
+    # --------------------------------------------------
+    # Restore the conversation's folder into
+    # the current authenticated session.
+    # --------------------------------------------------
+
     if folder_id:
         request.session[
             "active_folder_id"
@@ -146,7 +201,7 @@ def get_conversation(
     return {
         "conversation_id": conversation_id,
         "folder_id": folder_id,
-        "messages": messages
+        "messages": messages,
     }
 
 
@@ -158,9 +213,8 @@ def get_conversation(
 def rename_conversation(
     conversation_id: int,
     payload: RenameConversationRequest,
-    request: Request
+    request: Request,
 ):
-
     user_id = get_user_id(request)
 
     title = payload.title.strip()
@@ -168,22 +222,28 @@ def rename_conversation(
     if not title:
         raise HTTPException(
             status_code=400,
-            detail="Conversation title cannot be empty."
+            detail=(
+                "Conversation title cannot be empty."
+            ),
         )
+
+    # --------------------------------------------------
+    # Ownership check
+    # --------------------------------------------------
 
     if not memory.conversation_belongs_to_user(
         conversation_id,
-        user_id
+        user_id,
     ):
         raise HTTPException(
             status_code=404,
-            detail="Conversation not found."
+            detail="Conversation not found.",
         )
 
     memory.rename_conversation(
         conversation_id,
         user_id,
-        title
+        title,
     )
 
     return {
@@ -198,24 +258,33 @@ def rename_conversation(
 @router.delete("/{conversation_id}")
 def delete_conversation(
     conversation_id: int,
-    request: Request
+    request: Request,
 ):
-
     user_id = get_user_id(request)
+
+    # --------------------------------------------------
+    # Ownership check
+    # --------------------------------------------------
 
     if not memory.conversation_belongs_to_user(
         conversation_id,
-        user_id
+        user_id,
     ):
         raise HTTPException(
             status_code=404,
-            detail="Conversation not found."
+            detail="Conversation not found.",
         )
 
-    memory.delete_conversation(
+    deleted = memory.delete_conversation(
         conversation_id,
-        user_id
+        user_id,
     )
+
+    if not deleted:
+        raise HTTPException(
+            status_code=404,
+            detail="Conversation not found.",
+        )
 
     return {
         "success": True

@@ -22,7 +22,12 @@ class AnalyzedFolderService:
         UI / file registry
     """
 
+    # ==================================================
+    # INITIALIZATION
+    # ==================================================
+
     def __init__(self):
+
         if not settings.DATABASE_URL:
             raise RuntimeError(
                 "DATABASE_URL is not configured."
@@ -45,16 +50,24 @@ class AnalyzedFolderService:
     # ==================================================
 
     def create_tables(self):
+
         with self.pool.connection() as connection:
+
             with connection.cursor() as cursor:
+
+                # ------------------------------------------
+                # ANALYZED FOLDERS
+                # ------------------------------------------
 
                 cursor.execute(
                     """
                     CREATE TABLE IF NOT EXISTS
                     public.analyzed_folders (
+
                         id BIGSERIAL PRIMARY KEY,
 
                         user_id TEXT NOT NULL,
+
                         folder_id TEXT NOT NULL,
 
                         folder_name TEXT NOT NULL
@@ -82,18 +95,27 @@ class AnalyzedFolderService:
                     """
                 )
 
+                # ------------------------------------------
+                # ANALYZED FILES
+                # ------------------------------------------
+
                 cursor.execute(
                     """
                     CREATE TABLE IF NOT EXISTS
                     public.analyzed_files (
+
                         id BIGSERIAL PRIMARY KEY,
 
                         user_id TEXT NOT NULL,
+
                         folder_id TEXT NOT NULL,
+
                         file_id TEXT NOT NULL,
 
                         file_name TEXT NOT NULL,
+
                         path TEXT,
+
                         mime_type TEXT,
 
                         modified_time TIMESTAMPTZ,
@@ -116,21 +138,17 @@ class AnalyzedFolderService:
                     """
                 )
 
-                cursor.execute(
-                    """
-                    CREATE INDEX IF NOT EXISTS
-                    idx_analyzed_folders_user
-                    ON public.analyzed_folders(user_id)
-                    """
-                )
+                # ------------------------------------------
+                # FOLDER INDEXES
+                # ------------------------------------------
 
                 cursor.execute(
                     """
                     CREATE INDEX IF NOT EXISTS
-                    idx_analyzed_folders_user_updated
+                    idx_analyzed_folders_user
+
                     ON public.analyzed_folders(
-                        user_id,
-                        updated_at DESC
+                        user_id
                     )
                     """
                 )
@@ -138,8 +156,27 @@ class AnalyzedFolderService:
                 cursor.execute(
                     """
                     CREATE INDEX IF NOT EXISTS
+                    idx_analyzed_folders_user_updated
+
+                    ON public.analyzed_folders(
+                        user_id,
+                        updated_at DESC
+                    )
+                    """
+                )
+
+                # ------------------------------------------
+                # FILE INDEXES
+                # ------------------------------------------
+
+                cursor.execute(
+                    """
+                    CREATE INDEX IF NOT EXISTS
                     idx_analyzed_files_user
-                    ON public.analyzed_files(user_id)
+
+                    ON public.analyzed_files(
+                        user_id
+                    )
                     """
                 )
 
@@ -147,6 +184,7 @@ class AnalyzedFolderService:
                     """
                     CREATE INDEX IF NOT EXISTS
                     idx_analyzed_files_user_folder
+
                     ON public.analyzed_files(
                         user_id,
                         folder_id
@@ -169,6 +207,7 @@ class AnalyzedFolderService:
         file_count: int,
         chunk_count: int,
     ):
+
         if not user_id:
             raise ValueError(
                 "user_id is required."
@@ -179,10 +218,14 @@ class AnalyzedFolderService:
                 "folder_id is required."
             )
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(
+            timezone.utc
+        )
 
         with self.pool.connection() as connection:
+
             with connection.cursor() as cursor:
+
                 cursor.execute(
                     """
                     INSERT INTO public.analyzed_folders (
@@ -212,6 +255,7 @@ class AnalyzedFolderService:
                     )
 
                     DO UPDATE SET
+
                         folder_name =
                             EXCLUDED.folder_name,
 
@@ -256,6 +300,7 @@ class AnalyzedFolderService:
         modified_time=None,
         chunk_count: int = 0,
     ):
+
         if not user_id:
             raise ValueError(
                 "user_id is required."
@@ -271,10 +316,14 @@ class AnalyzedFolderService:
                 "file_id is required."
             )
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(
+            timezone.utc
+        )
 
         with self.pool.connection() as connection:
+
             with connection.cursor() as cursor:
+
                 cursor.execute(
                     """
                     INSERT INTO public.analyzed_files (
@@ -309,6 +358,7 @@ class AnalyzedFolderService:
                     )
 
                     DO UPDATE SET
+
                         file_name =
                             EXCLUDED.file_name,
 
@@ -351,14 +401,18 @@ class AnalyzedFolderService:
         self,
         files: list[dict],
     ):
+
         if not files:
             return
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(
+            timezone.utc
+        )
 
         rows = []
 
         for item in files:
+
             rows.append(
                 (
                     item["user_id"],
@@ -368,14 +422,21 @@ class AnalyzedFolderService:
                     item.get("path"),
                     item.get("mime_type"),
                     item.get("modified_time"),
-                    int(item.get("chunk_count", 0)),
+                    int(
+                        item.get(
+                            "chunk_count",
+                            0,
+                        )
+                    ),
                     now,
                     now,
                 )
             )
 
         with self.pool.connection() as connection:
+
             with connection.cursor() as cursor:
+
                 cursor.executemany(
                     """
                     INSERT INTO public.analyzed_files (
@@ -410,6 +471,7 @@ class AnalyzedFolderService:
                     )
 
                     DO UPDATE SET
+
                         file_name =
                             EXCLUDED.file_name,
 
@@ -441,13 +503,16 @@ class AnalyzedFolderService:
         self,
         user_id: str,
     ):
+
         if not user_id:
             raise ValueError(
                 "user_id is required."
             )
 
         with self.pool.connection() as connection:
+
             with connection.cursor() as cursor:
+
                 cursor.execute(
                     """
                     SELECT
@@ -458,14 +523,63 @@ class AnalyzedFolderService:
                         chunk_count,
                         analyzed_at,
                         updated_at
+
                     FROM public.analyzed_folders
+
                     WHERE user_id = %s
+
                     ORDER BY updated_at DESC
                     """,
-                    (user_id,),
+                    (
+                        user_id,
+                    ),
                 )
 
                 return cursor.fetchall()
+
+    # ==================================================
+    # GET LATEST ANALYZED FOLDER
+    # ==================================================
+
+    def get_latest_user_folder(
+        self,
+        user_id: str,
+    ):
+
+        if not user_id:
+            raise ValueError(
+                "user_id is required."
+            )
+
+        with self.pool.connection() as connection:
+
+            with connection.cursor() as cursor:
+
+                cursor.execute(
+                    """
+                    SELECT
+                        folder_id
+
+                    FROM public.analyzed_folders
+
+                    WHERE user_id = %s
+
+                    ORDER BY
+                        updated_at DESC
+
+                    LIMIT 1
+                    """,
+                    (
+                        user_id,
+                    ),
+                )
+
+                row = cursor.fetchone()
+
+        if not row:
+            return None
+
+        return row["folder_id"]
 
     # ==================================================
     # GET FOLDER
@@ -476,8 +590,21 @@ class AnalyzedFolderService:
         user_id: str,
         folder_id: str,
     ):
+
+        if not user_id:
+            raise ValueError(
+                "user_id is required."
+            )
+
+        if not folder_id:
+            raise ValueError(
+                "folder_id is required."
+            )
+
         with self.pool.connection() as connection:
+
             with connection.cursor() as cursor:
+
                 cursor.execute(
                     """
                     SELECT
@@ -488,7 +615,9 @@ class AnalyzedFolderService:
                         chunk_count,
                         analyzed_at,
                         updated_at
+
                     FROM public.analyzed_folders
+
                     WHERE user_id = %s
                       AND folder_id = %s
                     """,
@@ -501,7 +630,7 @@ class AnalyzedFolderService:
                 return cursor.fetchone()
 
     # ==================================================
-    # LIST FILES
+    # LIST FOLDER FILES
     # ==================================================
 
     def get_folder_files(
@@ -509,8 +638,21 @@ class AnalyzedFolderService:
         user_id: str,
         folder_id: str,
     ):
+
+        if not user_id:
+            raise ValueError(
+                "user_id is required."
+            )
+
+        if not folder_id:
+            raise ValueError(
+                "folder_id is required."
+            )
+
         with self.pool.connection() as connection:
+
             with connection.cursor() as cursor:
+
                 cursor.execute(
                     """
                     SELECT
@@ -522,9 +664,12 @@ class AnalyzedFolderService:
                         chunk_count,
                         analyzed_at,
                         updated_at
+
                     FROM public.analyzed_files
+
                     WHERE user_id = %s
                       AND folder_id = %s
+
                     ORDER BY file_name ASC
                     """,
                     (
@@ -546,10 +691,10 @@ class AnalyzedFolderService:
         file_id: str,
     ):
         """
-        Delete a file from the Zentra index.
+        Remove a file from Zentra's index.
 
-        IMPORTANT:
-        This does NOT delete the actual Google Drive file.
+        This does NOT delete the actual
+        Google Drive file.
         """
 
         if not user_id:
@@ -568,15 +713,17 @@ class AnalyzedFolderService:
             )
 
         with self.pool.connection() as connection:
+
             with connection.cursor() as cursor:
 
                 # ------------------------------------------
-                # Delete vector chunks
+                # DELETE VECTOR CHUNKS
                 # ------------------------------------------
 
                 cursor.execute(
                     """
                     DELETE FROM public.document_chunks
+
                     WHERE user_id = %s
                       AND folder_id = %s
                       AND file_id = %s
@@ -588,16 +735,18 @@ class AnalyzedFolderService:
                     ),
                 )
 
-                deleted_chunks =cursor.rowcount
-
+                deleted_chunks = (
+                    cursor.rowcount
+                )
 
                 # ------------------------------------------
-                # Delete file registry
+                # DELETE FILE REGISTRY
                 # ------------------------------------------
 
                 cursor.execute(
                     """
                     DELETE FROM public.analyzed_files
+
                     WHERE user_id = %s
                       AND folder_id = %s
                       AND file_id = %s
@@ -609,22 +758,26 @@ class AnalyzedFolderService:
                     ),
                 )
 
-                deleted_file =cursor.rowcount
-
+                deleted_file = (
+                    cursor.rowcount
+                )
 
                 # ------------------------------------------
-                # Recalculate folder counters
+                # RECALCULATE FOLDER COUNTS
                 # ------------------------------------------
 
                 cursor.execute(
                     """
                     SELECT
-                        COUNT(DISTINCT file_id)
-                            AS file_count,
 
-                        COUNT(*)
-                            AS chunk_count
+                        COUNT(
+                            DISTINCT file_id
+                        ) AS file_count,
+
+                        COUNT(*) AS chunk_count
+
                     FROM public.document_chunks
+
                     WHERE user_id = %s
                       AND folder_id = %s
                     """,
@@ -634,24 +787,36 @@ class AnalyzedFolderService:
                     ),
                 )
 
-                counts = cursor.fetchone()
+                counts = (
+                    cursor.fetchone()
+                )
+
+                # ------------------------------------------
+                # UPDATE FOLDER REGISTRY
+                # ------------------------------------------
 
                 cursor.execute(
                     """
                     UPDATE public.analyzed_folders
+
                     SET
                         file_count = %s,
                         chunk_count = %s,
                         updated_at = NOW()
+
                     WHERE user_id = %s
                       AND folder_id = %s
                     """,
                     (
                         int(
-                            counts["file_count"]
+                            counts[
+                                "file_count"
+                            ]
                         ),
                         int(
-                            counts["chunk_count"]
+                            counts[
+                                "chunk_count"
+                            ]
                         ),
                         user_id,
                         folder_id,
@@ -669,7 +834,7 @@ class AnalyzedFolderService:
         }
 
     # ==================================================
-    # DELETE FOLDER
+    # DELETE ENTIRE FOLDER
     # ==================================================
 
     def delete_folder(
@@ -678,15 +843,19 @@ class AnalyzedFolderService:
         folder_id: str,
     ):
         """
-        Remove the analyzed folder from Zentra.
+        Remove an analyzed folder from Zentra.
 
-        This deletes:
-            - document_chunks
-            - analyzed_files
-            - analyzed_folders
+        Deletes:
 
-        It DOES NOT delete Google Drive files.
-        It DOES NOT delete conversations.
+            document_chunks
+            analyzed_files
+            analyzed_folders
+
+        Does NOT delete:
+
+            Google Drive files
+            conversations
+            messages
         """
 
         if not user_id:
@@ -700,16 +869,20 @@ class AnalyzedFolderService:
             )
 
         with self.pool.connection() as connection:
+
             with connection.cursor() as cursor:
 
                 # ------------------------------------------
-                # Count chunks before deletion
+                # COUNT CHUNKS
                 # ------------------------------------------
 
                 cursor.execute(
                     """
-                    SELECT COUNT(*) AS total
+                    SELECT
+                        COUNT(*) AS total
+
                     FROM public.document_chunks
+
                     WHERE user_id = %s
                       AND folder_id = %s
                     """,
@@ -719,19 +892,22 @@ class AnalyzedFolderService:
                     ),
                 )
 
-                chunk_row = cursor.fetchone()
+                chunk_row = (
+                    cursor.fetchone()
+                )
 
-
-                deleted_chunks =int(chunk_row["total"])
-
+                deleted_chunks = int(
+                    chunk_row["total"]
+                )
 
                 # ------------------------------------------
-                # Delete chunks
+                # DELETE CHUNKS
                 # ------------------------------------------
 
                 cursor.execute(
                     """
                     DELETE FROM public.document_chunks
+
                     WHERE user_id = %s
                       AND folder_id = %s
                     """,
@@ -742,12 +918,13 @@ class AnalyzedFolderService:
                 )
 
                 # ------------------------------------------
-                # Delete files
+                # DELETE FILE REGISTRY
                 # ------------------------------------------
 
                 cursor.execute(
                     """
                     DELETE FROM public.analyzed_files
+
                     WHERE user_id = %s
                       AND folder_id = %s
                     """,
@@ -757,16 +934,18 @@ class AnalyzedFolderService:
                     ),
                 )
 
-                deleted_files = cursor.rowcount
-
+                deleted_files = (
+                    cursor.rowcount
+                )
 
                 # ------------------------------------------
-                # Delete folder registry
+                # DELETE FOLDER REGISTRY
                 # ------------------------------------------
 
                 cursor.execute(
                     """
                     DELETE FROM public.analyzed_folders
+
                     WHERE user_id = %s
                       AND folder_id = %s
                     """,
@@ -776,8 +955,9 @@ class AnalyzedFolderService:
                     ),
                 )
 
-                deleted_folder = cursor.rowcount
-
+                deleted_folder = (
+                    cursor.rowcount
+                )
 
             connection.commit()
 
@@ -797,4 +977,5 @@ class AnalyzedFolderService:
     # ==================================================
 
     def close(self):
+
         self.pool.close()
