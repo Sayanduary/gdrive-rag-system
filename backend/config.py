@@ -67,7 +67,7 @@ class Settings(BaseSettings):
 
     # Normal RAG / chat generation
     GROQ_LLM_MODEL: str = (
-        "groq/compound"
+        "openai/gpt-oss-120b"
     )
 
     # Scanned PDF / image OCR
