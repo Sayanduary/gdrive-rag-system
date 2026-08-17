@@ -1293,14 +1293,14 @@ function Chat({ user, onSyncAnotherFolder }) {
           <div
             ref={messagesContainerRef}
             className="
-              min-h-0
-              flex-1
-              overflow-y-auto
-              px-4
-              py-6
-              sm:px-6
-              sm:py-8
-            "
+    chat-scrollbar
+    min-h-0
+    flex-1
+    px-4
+    py-6
+    sm:px-6
+    sm:py-8
+  "
           >
             <div className="mx-auto w-full max-w-3xl pb-4">
               {/* Empty State */}
