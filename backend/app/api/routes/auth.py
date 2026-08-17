@@ -1,3 +1,4 @@
+from urllib.parse import urlparse
 from fastapi import APIRouter, Request, HTTPException
 from fastapi.responses import RedirectResponse
 from google_auth_oauthlib.flow import Flow
@@ -41,6 +42,12 @@ def create_google_flow():
 @router.get("/google")
 def google_login(request: Request):
 
+    referer = request.query_params.get("redirect_url") or request.headers.get("referer")
+    if referer:
+        parsed = urlparse(referer)
+        if parsed.scheme and parsed.netloc:
+            request.session["frontend_url"] = f"{parsed.scheme}://{parsed.netloc}"
+
     flow = create_google_flow()
 
     authorization_url, state = flow.authorization_url(
@@ -64,6 +71,7 @@ def google_login(request: Request):
     return RedirectResponse(
         authorization_url
     )
+
 
 
 @router.get("/google/callback")
@@ -145,9 +153,15 @@ def google_callback(request: Request):
         None
     )
 
+    frontend_url = request.session.pop(
+        "frontend_url",
+        None
+    ) or settings.FRONTEND_URL
+
     return RedirectResponse(
-        f"{settings.FRONTEND_URL.rstrip('/')}/"
+        f"{frontend_url.rstrip('/')}/"
     )
+
 
 
 

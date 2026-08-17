@@ -18,10 +18,12 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_SECRET: str = ""
 
     GOOGLE_REDIRECT_URI: str = (
-        "http://localhost:8000/api/auth/google/callback"
+        "https://gdrive-rag-system-h5sf.onrender.com/api/auth/google/callback"
     )
 
-    FRONTEND_URL: str = "http://localhost:5173"
+
+    FRONTEND_URL: str = "https://gdrive-rag-system.vercel.app"
+
 
     SESSION_COOKIE_SAMESITE: str = "lax"
 
