@@ -42,10 +42,15 @@ app.add_middleware(
 # --------------------------------------------------
 
 app.add_middleware(
-    SessionMiddleware,
-    secret_key=settings.SESSION_SECRET,
-    same_site="lax",
-    https_only=False,
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",
+        # Add your Vercel URL after deployment
+        # "https://your-app.vercel.app",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
