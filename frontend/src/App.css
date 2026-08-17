@@ -1,184 +1,377 @@
-app.counter {
-  font-size: 16px;
-  padding: 5px 10px;
-  border-radius: 5px;
-  color: var(--accent);
-  background: var(--accent-bg);
-  border: 2px solid transparent;
-  transition: border-color 0.3s;
-  margin-bottom: 24px;
+/* =========================================================
+   ZENTRA BACKGROUND
+========================================================= */
 
-  &:hover {
-    border-color: var(--accent-border);
-  }
-  &:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 2px;
-  }
+.zentra-grid {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: -2;
+
+  opacity: 0.035;
+
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.5) 1px,
+      transparent 1px),
+    linear-gradient(90deg,
+      rgba(255, 255, 255, 0.5) 1px,
+      transparent 1px);
+
+  background-size: 48px 48px;
 }
 
-.hero {
+.zentra-glow {
+  position: fixed;
+
+  top: -350px;
+  left: 50%;
+
+  width: 650px;
+  height: 650px;
+
+  transform: translateX(-50%);
+
+  border-radius: 50%;
+
+  background: rgba(255, 255, 255, 0.025);
+
+  filter: blur(120px);
+
+  pointer-events: none;
+
+  z-index: -1;
+}
+
+
+/* =========================================================
+   BOXES
+========================================================= */
+
+.zentra-box {
   position: relative;
 
-  .base,
-  .framework,
-  .vite {
-    inset-inline: 0;
-    margin: 0 auto;
-  }
+  border: 1px solid var(--border);
 
-  .base {
-    width: 170px;
-    position: relative;
-    z-index: 0;
-  }
+  background:
+    linear-gradient(145deg,
+      rgba(255, 255, 255, 0.035),
+      rgba(255, 255, 255, 0.012));
 
-  .framework,
-  .vite {
-    position: absolute;
-  }
+  backdrop-filter: blur(20px);
 
-  .framework {
-    z-index: 1;
-    top: 34px;
-    height: 28px;
-    transform: perspective(2000px) rotateZ(300deg) rotateX(44deg) rotateY(39deg)
-      scale(1.4);
-  }
+  box-shadow: var(--shadow);
 
-  .vite {
-    z-index: 0;
-    top: 107px;
-    height: 26px;
-    width: auto;
-    transform: perspective(2000px) rotateZ(300deg) rotateX(40deg) rotateY(39deg)
-      scale(0.8);
-  }
+  transition:
+    border-color 0.3s ease,
+    background 0.3s ease;
 }
 
-#center {
+.zentra-box:hover {
+  border-color: var(--border-hover);
+
+  background:
+    linear-gradient(145deg,
+      rgba(255, 255, 255, 0.045),
+      rgba(255, 255, 255, 0.018));
+}
+
+
+/* =========================================================
+   FEATURE BOX
+========================================================= */
+
+.zentra-feature {
+  border: 1px solid var(--border);
+
+  background: rgba(255, 255, 255, 0.02);
+
+  backdrop-filter: blur(16px);
+
+  transition:
+    border-color 0.3s ease,
+    background 0.3s ease,
+    transform 0.3s ease;
+}
+
+.zentra-feature:hover {
+  border-color: var(--border-hover);
+
+  background: rgba(255, 255, 255, 0.035);
+
+  transform: translateY(-2px);
+}
+
+
+/* =========================================================
+   ICON BOX
+========================================================= */
+
+.zentra-icon {
   display: flex;
-  flex-direction: column;
-  gap: 25px;
-  place-content: center;
-  place-items: center;
-  flex-grow: 1;
 
-  @media (max-width: 1024px) {
-    padding: 32px 20px 24px;
-    gap: 18px;
-  }
+  align-items: center;
+  justify-content: center;
+
+  width: 42px;
+  height: 42px;
+
+  border-radius: 12px;
+
+  border: 1px solid var(--border);
+
+  background: rgba(255, 255, 255, 0.025);
+
+  color: #a3a3a3;
+
+  transition:
+    color 0.3s ease,
+    border-color 0.3s ease,
+    background 0.3s ease;
 }
+
+.zentra-feature:hover .zentra-icon {
+  color: #e5e5e5;
+
+  border-color: var(--border-hover);
+
+  background: rgba(255, 255, 255, 0.05);
+}
+
+
+/* =========================================================
+   ORIGINAL BOXED NEXT STEPS
+========================================================= */
 
 #next-steps {
   display: flex;
+
+  width: 100%;
+
   border-top: 1px solid var(--border);
+
   text-align: left;
 
-  & > div {
-    flex: 1 1 0;
-    padding: 32px;
-    @media (max-width: 1024px) {
-      padding: 24px 20px;
-    }
-  }
+  background: rgba(255, 255, 255, 0.012);
 
-  .icon {
-    margin-bottom: 16px;
-    width: 22px;
-    height: 22px;
-  }
+  backdrop-filter: blur(20px);
 
-  @media (max-width: 1024px) {
-    flex-direction: column;
-    text-align: center;
-  }
+  box-shadow:
+    0 20px 70px rgba(0, 0, 0, 0.25);
 }
+
+#next-steps>div {
+  flex: 1 1 0;
+
+  padding: 32px;
+
+  background: var(--card);
+
+  border-left: 1px solid var(--border);
+
+  transition:
+    background 0.3s ease,
+    border-color 0.3s ease;
+}
+
+#next-steps>div:first-child {
+  border-left: none;
+}
+
+#next-steps>div:hover {
+  background: var(--card-hover);
+
+  border-color: var(--border-hover);
+}
+
+
+/* =========================================================
+   DOCS BOX
+========================================================= */
 
 #docs {
   border-right: 1px solid var(--border);
-
-  @media (max-width: 1024px) {
-    border-right: none;
-    border-bottom: 1px solid var(--border);
-  }
 }
+
+
+/* =========================================================
+   ICON
+========================================================= */
+
+#next-steps .icon {
+  width: 22px;
+  height: 22px;
+
+  margin-bottom: 16px;
+
+  color: var(--text-muted);
+
+  transition:
+    color 0.3s ease,
+    transform 0.3s ease;
+}
+
+#next-steps>div:hover .icon {
+  color: var(--text);
+
+  transform: translateY(-1px);
+}
+
+
+/* =========================================================
+   LINKS / BUTTON BOXES
+========================================================= */
 
 #next-steps ul {
   list-style: none;
+
   padding: 0;
+
   display: flex;
+
   gap: 8px;
+
   margin: 32px 0 0;
-
-  .logo {
-    height: 18px;
-  }
-
-  a {
-    color: var(--text-h);
-    font-size: 16px;
-    border-radius: 6px;
-    background: var(--social-bg);
-    display: flex;
-    padding: 6px 12px;
-    align-items: center;
-    gap: 8px;
-    text-decoration: none;
-    transition: box-shadow 0.3s;
-
-    &:hover {
-      box-shadow: var(--shadow);
-    }
-    .button-icon {
-      height: 18px;
-      width: 18px;
-    }
-  }
-
-  @media (max-width: 1024px) {
-    margin-top: 20px;
-    flex-wrap: wrap;
-    justify-content: center;
-
-    li {
-      flex: 1 1 calc(50% - 8px);
-    }
-
-    a {
-      width: 100%;
-      justify-content: center;
-      box-sizing: border-box;
-    }
-  }
 }
+
+#next-steps ul .logo {
+  height: 18px;
+}
+
+#next-steps ul a {
+  display: flex;
+
+  align-items: center;
+
+  gap: 8px;
+
+  padding: 7px 12px;
+
+  color: var(--text-h);
+
+  font-size: 14px;
+
+  border-radius: 8px;
+
+  background: var(--social-bg);
+
+  border: 1px solid var(--border);
+
+  text-decoration: none;
+
+  transition:
+    background 0.3s ease,
+    border-color 0.3s ease,
+    box-shadow 0.3s ease,
+    transform 0.3s ease;
+}
+
+#next-steps ul a:hover {
+  background: rgba(255, 255, 255, 0.06);
+
+  border-color: var(--border-hover);
+
+  box-shadow: var(--shadow);
+
+  transform: translateY(-1px);
+}
+
+#next-steps ul .button-icon {
+  width: 18px;
+  height: 18px;
+}
+
+
+/* =========================================================
+   SPACER
+========================================================= */
 
 #spacer {
   height: 88px;
+
   border-top: 1px solid var(--border);
-  @media (max-width: 1024px) {
-    height: 48px;
-  }
+
+  background: rgba(255, 255, 255, 0.01);
 }
+
+
+/* =========================================================
+   TICKS
+========================================================= */
 
 .ticks {
   position: relative;
+
   width: 100%;
+}
 
-  &::before,
-  &::after {
-    content: "";
-    position: absolute;
-    top: -4.5px;
-    border: 5px solid transparent;
+.ticks::before,
+.ticks::after {
+  content: "";
+
+  position: absolute;
+
+  top: -4.5px;
+
+  border: 5px solid transparent;
+
+  z-index: 2;
+}
+
+.ticks::before {
+  left: 0;
+
+  border-left-color: var(--border);
+}
+
+.ticks::after {
+  right: 0;
+
+  border-right-color: var(--border);
+}
+
+
+/* =========================================================
+   MOBILE
+========================================================= */
+
+@media (max-width: 1024px) {
+  #next-steps {
+    flex-direction: column;
+
+    text-align: center;
   }
 
-  &::before {
-    left: 0;
-    border-left-color: var(--border);
+  #next-steps>div {
+    padding: 24px 20px;
   }
-  &::after {
-    right: 0;
-    border-right-color: var(--border);
+
+  #docs {
+    border-right: none;
+
+    border-bottom: 1px solid var(--border);
+  }
+
+  #next-steps ul {
+    margin-top: 20px;
+
+    flex-wrap: wrap;
+
+    justify-content: center;
+  }
+
+  #next-steps ul li {
+    flex: 1 1 calc(50% - 8px);
+  }
+
+  #next-steps ul a {
+    width: 100%;
+
+    justify-content: center;
+
+    box-sizing: border-box;
+  }
+
+  #spacer {
+    height: 48px;
   }
 }

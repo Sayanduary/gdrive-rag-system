@@ -1,10 +1,43 @@
+@import url("https://fonts.googleapis.com/css2?family=Rubik:wght@300;400;500;600;700&display=swap");
+
 @import "tailwindcss";
 
 @theme {
   --color-app-bg: #0d0d0d;
+  --font-sans: "Rubik", sans-serif;
+}
+
+:root {
+  --bg: #0d0d0d;
+
+  --card: rgba(255, 255, 255, 0.025);
+  --card-hover: rgba(255, 255, 255, 0.045);
+
+  --border: rgba(255, 255, 255, 0.08);
+  --border-hover: rgba(255, 255, 255, 0.15);
+
+  --text: #e5e5e5;
+  --text-h: #f5f5f5;
+  --text-muted: #737373;
+
+  --accent: #ffffff;
+  --accent-bg: rgba(255, 255, 255, 0.05);
+  --accent-border: rgba(255, 255, 255, 0.18);
+
+  --social-bg: rgba(255, 255, 255, 0.035);
+
+  --shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
 }
 
 body {
-  background: #0d0d0d;
-  color: #e5e5e5;
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Rubik", sans-serif;
 }

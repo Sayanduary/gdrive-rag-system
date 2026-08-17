@@ -107,10 +107,7 @@ function App() {
         path="/analyze"
         element={
           <ProtectedRoute user={user} checkingAuth={checkingAuth}>
-            <Analyze
-              user={user}
-              onAnalysisComplete={handleAnalysisComplete}
-            />
+            <Analyze user={user} onAnalysisComplete={handleAnalysisComplete} />
           </ProtectedRoute>
         }
       />
