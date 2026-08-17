@@ -4,7 +4,10 @@ const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ||
   "https://gdrive-rag-system-h5sf.onrender.com";
 
-console.log("ZENTRA API BASE URL:", API_BASE_URL);
+console.log(
+  "ZENTRA API BASE URL:",
+  API_BASE_URL
+);
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -15,54 +18,88 @@ const api = axios.create({
   },
 });
 
+
 // ==================================================
-// REQUEST DEBUG
+// REQUEST INTERCEPTOR
 // ==================================================
 
 api.interceptors.request.use(
   (config) => {
-    console.log("API REQUEST:", {
-      method: config.method,
-      url: `${config.baseURL}${config.url}`,
-    });
+
+    console.log(
+      "API REQUEST:",
+      {
+        method: config.method,
+        url:
+          `${config.baseURL}${config.url}`,
+      }
+    );
 
     return config;
   },
-  (error) => Promise.reject(error),
+
+  (error) => {
+    return Promise.reject(error);
+  }
 );
 
+
 // ==================================================
-// RESPONSE DEBUG
+// RESPONSE INTERCEPTOR
 // ==================================================
 
 api.interceptors.response.use(
   (response) => {
-    console.log("API RESPONSE:", {
-      url:
-        response.request?.responseURL ||
-        `${response.config.baseURL}${response.config.url}`,
 
-      status: response.status,
+    console.log(
+      "API RESPONSE:",
+      {
+        url:
+          response.request?.responseURL ||
+          `${response.config.baseURL}${response.config.url}`,
 
-      data: response.data,
-    });
+        status:
+          response.status,
+
+        data:
+          response.data,
+      }
+    );
+
+    // IMPORTANT:
+    // Return the COMPLETE Axios response.
+    //
+    // DO NOT use:
+    //
+    // return response.data;
+    //
 
     return response;
   },
 
   (error) => {
-    console.error("API ERROR:", {
-      url: error.config
-        ? `${error.config.baseURL}${error.config.url}`
-        : undefined,
 
-      status: error.response?.status,
+    console.error(
+      "API ERROR:",
+      {
+        url:
+          error.config
+            ? `${error.config.baseURL}${error.config.url}`
+            : undefined,
 
-      data: error.response?.data,
-    });
+        status:
+          error.response?.status,
 
-    return Promise.reject(error);
-  },
+        data:
+          error.response?.data,
+      }
+    );
+
+    return Promise.reject(
+      error
+    );
+  }
 );
+
 
 export default api;
