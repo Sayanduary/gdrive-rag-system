@@ -220,13 +220,11 @@ function Dashboard({ user, onChat }) {
 
       <Navbar
         user={user}
+        onLogout={onLogout}
         showDashboard={true}
         showChat={true}
         showSync={true}
         activeTab="dashboard"
-        onDashboard={() => navigate("/dashboard")}
-        onChat={() => navigate("/chat")}
-        onSyncAnotherFolder={() => navigate("/analyze")}
       />
 
       <main className="relative mx-auto w-full max-w-6xl px-5 py-8 sm:px-6 lg:px-8">

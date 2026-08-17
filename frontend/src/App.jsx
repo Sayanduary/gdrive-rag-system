@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Routes, Route, Navigate, useNavigate } from "react-router-dom";
+import { Routes, Route, Navigate } from "react-router-dom";
 
 import api from "./services/api";
 
@@ -45,34 +45,6 @@ function ProtectedRoute({ user, checkingAuth, children }) {
 }
 
 // ==================================================
-// CHECK OLD LOCAL ANALYSIS SESSION
-// ==================================================
-
-function getSavedAnalysis() {
-  try {
-    const savedSession = localStorage.getItem(STORAGE_KEY);
-
-    if (!savedSession) {
-      return null;
-    }
-
-    const parsedSession = JSON.parse(savedSession);
-
-    if (parsedSession?.folderUrl && parsedSession?.analysis) {
-      return parsedSession;
-    }
-
-    return null;
-  } catch (error) {
-    console.error("Failed to read saved Drive session:", error);
-
-    localStorage.removeItem(STORAGE_KEY);
-
-    return null;
-  }
-}
-
-// ==================================================
 // APP
 // ==================================================
 
@@ -106,6 +78,7 @@ function App() {
 
         if (!response.data?.authenticated) {
           setUser(null);
+
           setAnalysis(null);
 
           localStorage.removeItem(STORAGE_KEY);
@@ -119,26 +92,13 @@ function App() {
         // AUTHENTICATED
         // ============================================
 
-        const authenticatedUser = response.data.user || null;
-
-        setUser(authenticatedUser);
-
-        // ============================================
-        // RESTORE LEGACY LOCAL ANALYSIS
-        // ============================================
-
-        const savedSession = getSavedAnalysis();
-
-        if (savedSession) {
-          setAnalysis(savedSession.analysis);
-        } else {
-          setAnalysis(null);
-        }
+        setUser(response.data.user || null);
       } catch (error) {
         if (!ignore) {
           console.error("Authentication check failed:", error);
 
           setUser(null);
+
           setAnalysis(null);
 
           localStorage.removeItem(STORAGE_KEY);
@@ -178,7 +138,7 @@ function App() {
   }
 
   // ==================================================
-  // CLEAR CURRENT DRIVE SESSION
+  // CLEAR SESSION
   // ==================================================
 
   function clearSession() {
@@ -198,6 +158,29 @@ function App() {
   }
 
   // ==================================================
+  // LOGOUT
+  // ==================================================
+
+  async function handleLogout() {
+    try {
+      await api.post("/api/auth/logout");
+    } catch (error) {
+      console.error("Logout failed:", error);
+    } finally {
+      // Clear React authentication state
+      setUser(null);
+
+      // Clear analysis state
+      setAnalysis(null);
+
+      // Clear local state
+      localStorage.removeItem(STORAGE_KEY);
+
+      localStorage.removeItem(ACTIVE_CHAT_KEY);
+    }
+  }
+
+  // ==================================================
   // ROOT
   // ==================================================
 
@@ -206,20 +189,9 @@ function App() {
       return <LoadingScreen />;
     }
 
-    // --------------------------------------------
-    // NOT LOGGED IN
-    // --------------------------------------------
-
     if (!user) {
       return <Navigate to="/login" replace />;
     }
-
-    // --------------------------------------------
-    // AUTHENTICATED
-    //
-    // Dashboard is now always the first
-    // authenticated page.
-    // --------------------------------------------
 
     return <Navigate to="/dashboard" replace />;
   }
@@ -247,7 +219,7 @@ function App() {
         path="/dashboard"
         element={
           <ProtectedRoute user={user} checkingAuth={checkingAuth}>
-            <Dashboard user={user} />
+            <Dashboard user={user} onLogout={handleLogout} />
           </ProtectedRoute>
         }
       />
@@ -260,7 +232,11 @@ function App() {
         path="/analyze"
         element={
           <ProtectedRoute user={user} checkingAuth={checkingAuth}>
-            <Analyze user={user} onAnalysisComplete={handleAnalysisComplete} />
+            <Analyze
+              user={user}
+              onAnalysisComplete={handleAnalysisComplete}
+              onLogout={handleLogout}
+            />
           </ProtectedRoute>
         }
       />
@@ -277,6 +253,7 @@ function App() {
               user={user}
               analysis={analysis}
               onSyncAnotherFolder={handleSyncAnotherFolder}
+              onLogout={handleLogout}
             />
           </ProtectedRoute>
         }

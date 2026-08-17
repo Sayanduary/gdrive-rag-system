@@ -14,6 +14,7 @@ import api from "../services/api";
 
 function Navbar({
   user,
+  onLogout,
   onHistory,
   showDashboard = false,
   showChat = false,
@@ -87,29 +88,20 @@ function Navbar({
   // ==================================================
   // LOGOUT
   // ==================================================
-
   async function logout() {
+    setOpen(false);
+
+    if (typeof onLogout === "function") {
+      await onLogout();
+      return;
+    }
+
     try {
       await api.post("/api/auth/logout");
     } catch (error) {
       console.error("Logout failed:", error);
-    } finally {
-      localStorage.removeItem("gdrive_rag_session");
-
-      localStorage.removeItem("gdrive_rag_active_conversation");
-
-      const userId = user?.sub || user?.email;
-
-      if (userId) {
-        localStorage.removeItem(`gdrive_rag_active_conversation_${userId}`);
-      }
-
-      navigate("/login", {
-        replace: true,
-      });
     }
   }
-
   const dashboardActive = activeTab === "dashboard";
 
   const chatActive = activeTab === "chat";

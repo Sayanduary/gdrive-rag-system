@@ -87,11 +87,9 @@ function Analyze({ user, onAnalysisComplete }) {
       {/* Existing Navbar */}
       <Navbar
         user={user}
+        onLogout={onLogout}
         showDashboard={true}
         showChat={true}
-        onDashboard={() => navigate("/dashboard")}
-        onChat={handleGoToChat}
-        activeTab=""
       />
 
       {/* Main */}

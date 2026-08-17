@@ -777,15 +777,9 @@ function Chat({ user, onSyncAnotherFolder }) {
 
       <Navbar
         user={user}
+        onLogout={onLogout}
         showDashboard={true}
         showChat={true}
-        showSync={true}
-        showHistory={true}
-        activeTab="chat"
-        onDashboard={() => navigate("/dashboard")}
-        onChat={() => navigate("/chat")}
-        onSyncAnotherFolder={() => navigate("/analyze")}
-        onHistory={() => setMobileSidebarOpen(true)}
       />
 
       {/* ==================================================
