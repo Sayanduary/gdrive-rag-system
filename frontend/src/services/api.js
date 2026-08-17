@@ -58,7 +58,23 @@ api.interceptors.response.use(
     return response;
   },
 
-  (error) => {
+  async (error) => {
+    const config = error.config;
+
+    // Retry transient 502 / 503 Bad Gateway / Service Unavailable errors once (e.g. Render container swap)
+    if (
+      (error.response?.status === 502 || error.response?.status === 503) &&
+      config &&
+      !config._retry
+    ) {
+      config._retry = true;
+      console.warn(
+        `Transient ${error.response.status} Bad Gateway detected. Retrying ${config.url} in 1.5s...`,
+      );
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      return api(config);
+    }
+
     console.error("API ERROR:", {
       url: error.config
         ? `${error.config.baseURL}${error.config.url}`
