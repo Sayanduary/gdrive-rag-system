@@ -22,6 +22,7 @@ router = APIRouter(
 # ==================================================
 
 class DriveAnalyzeRequest(BaseModel):
+
     folder_url: str
 
 
@@ -45,17 +46,14 @@ def extract_folder_id(
     Extract a Google Drive folder ID from:
 
     https://drive.google.com/drive/folders/FOLDER_ID
-
     https://drive.google.com/drive/u/1/folders/FOLDER_ID
-
     https://drive.google.com/drive/u/0/folders/FOLDER_ID
-
     https://drive.google.com/open?id=FOLDER_ID
-
     FOLDER_ID
     """
 
     if not isinstance(folder_url, str):
+
         raise ValueError(
             "Google Drive folder URL must be a string."
         )
@@ -63,6 +61,7 @@ def extract_folder_id(
     value = folder_url.strip()
 
     if not value:
+
         raise ValueError(
             "Google Drive folder URL cannot be empty."
         )
@@ -72,7 +71,7 @@ def extract_folder_id(
     # ==================================================
 
     match = re.search(
-        r"/folders/([a-zA-Z0-9_-]+)",
+        r"/folders/([a-zA-Z0-9\_-]+)",
         value,
     )
 
@@ -81,6 +80,7 @@ def extract_folder_id(
         folder_id = match.group(1).strip()
 
         if folder_id:
+
             return folder_id
 
     # ==================================================
@@ -88,7 +88,7 @@ def extract_folder_id(
     # ==================================================
 
     match = re.search(
-        r"[?&]id=([a-zA-Z0-9_-]+)",
+        r"[?&]id=([a-zA-Z0-9\_-]+)",
         value,
     )
 
@@ -97,6 +97,7 @@ def extract_folder_id(
         folder_id = match.group(1).strip()
 
         if folder_id:
+
             return folder_id
 
     # ==================================================
@@ -104,7 +105,7 @@ def extract_folder_id(
     # ==================================================
 
     if re.fullmatch(
-        r"[a-zA-Z0-9_-]+",
+        r"[a-zA-Z0-9\_-]+",
         value,
     ):
 
@@ -226,6 +227,168 @@ def get_folder_metadata(
             detail=(
                 "Unable to access the Google Drive folder."
             ),
+        )
+
+
+# ==================================================
+# DEBUG DRIVE ACCESS
+# ==================================================
+
+@router.get(
+    "/debug/access/{folder_id}"
+)
+def debug_drive_access(
+    folder_id: str,
+    request: Request,
+):
+    """
+    Debug whether the currently authenticated
+    Google account can access a specific Drive folder.
+
+    This does NOT perform ingestion.
+
+    It only checks:
+    1. Google user session
+    2. Google credentials session
+    3. Google Drive folder accessibility
+    """
+
+    print()
+    print("=" * 70)
+    print("DRIVE ACCESS DEBUG")
+    print("=" * 70)
+
+    # ==================================================
+    # CURRENT GOOGLE USER
+    # ==================================================
+
+    user = request.session.get(
+        "google_user"
+    )
+
+    print(
+        "Authenticated user:",
+        user
+    )
+
+    if not user:
+
+        raise HTTPException(
+            status_code=401,
+            detail=(
+                "No authenticated Google user."
+            ),
+        )
+
+    # ==================================================
+    # GOOGLE CREDENTIALS
+    # ==================================================
+
+    credentials_data = (
+        request.session.get(
+            "google_credentials"
+        )
+    )
+
+    print(
+        "Google credentials exist:",
+        bool(credentials_data)
+    )
+
+    if not credentials_data:
+
+        raise HTTPException(
+            status_code=401,
+            detail=(
+                "No Google Drive credentials."
+            ),
+        )
+
+    # ==================================================
+    # FOLDER
+    # ==================================================
+
+    print(
+        "Folder ID:",
+        folder_id
+    )
+
+    # ==================================================
+    # CREATE DRIVE SERVICE
+    # ==================================================
+
+    try:
+
+        drive_service = get_drive_service(
+            credentials_data
+        )
+
+        # ==================================================
+        # VERIFY FOLDER
+        # ==================================================
+
+        folder = get_folder_metadata(
+            drive_service,
+            folder_id
+        )
+
+        print()
+        print("DRIVE ACCESS: SUCCESS")
+
+        print(
+            "Folder name:",
+            folder.get("name")
+        )
+
+        print(
+            "Folder ID:",
+            folder.get("id")
+        )
+
+        print(
+            "MIME type:",
+            folder.get("mimeType")
+        )
+
+        print(
+            "Web URL:",
+            folder.get("webViewLink")
+        )
+
+        print("=" * 70)
+
+        return {
+            "success": True,
+            "user": user,
+            "folder": folder,
+        }
+
+    except HTTPException:
+
+        raise
+
+    except Exception as error:
+
+        print()
+        print("=" * 70)
+        print("DRIVE ACCESS DEBUG FAILED")
+        print("=" * 70)
+
+        print(
+            "Error type:",
+            type(error).__name__
+        )
+
+        print(
+            "Error:",
+            repr(error)
+        )
+
+        print("=" * 70)
+
+        raise HTTPException(
+            status_code=500,
+            detail=str(error)
         )
 
 
