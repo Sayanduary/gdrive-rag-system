@@ -5,6 +5,7 @@ import {
   FiLogOut,
   FiMessageSquare,
   FiRefreshCw,
+  FiMenu,
 } from "react-icons/fi";
 
 import api from "../services/api";
@@ -13,19 +14,18 @@ function Navbar({
   user,
   onChat,
   onSyncAnotherFolder,
+  onHistory,
   showChat = false,
   showSync = false,
+  showHistory = false,
 }) {
   const [open, setOpen] = useState(false);
 
   const menuRef = useRef(null);
 
   const displayName = user?.name || "Google User";
-
   const email = user?.email || "";
-
   const avatar = user?.picture || "";
-
   const initial = displayName.charAt(0).toUpperCase();
 
   // ==================================================
@@ -59,6 +59,18 @@ function Navbar({
   }
 
   // ==================================================
+  // MOBILE CHAT HISTORY
+  // ==================================================
+
+  function handleHistory() {
+    setOpen(false);
+
+    if (typeof onHistory === "function") {
+      onHistory();
+    }
+  }
+
+  // ==================================================
   // SYNC ANOTHER FOLDER
   // ==================================================
 
@@ -81,7 +93,6 @@ function Navbar({
       console.error("Logout failed:", error);
     } finally {
       localStorage.removeItem("gdrive_rag_session");
-
       localStorage.removeItem("gdrive_rag_active_conversation");
 
       window.location.href = "/";
@@ -90,25 +101,62 @@ function Navbar({
 
   return (
     <header className="relative z-50 border-b border-white/[0.06] bg-[#0d0d0d]/90 backdrop-blur-xl">
-      <div className="mx-auto flex h-[84px] max-w-[1440px] items-center justify-between px-6 sm:px-10 lg:px-12">
+      <div className="mx-auto flex h-[84px] max-w-[1440px] items-center justify-between px-4 sm:px-10 lg:px-12">
         {/* ==================================================
-            LEFT - BRAND
+            LEFT
         ================================================== */}
 
-        <button
-          type="button"
-          onClick={showChat ? handleChat : undefined}
-          className={`flex items-center gap-4 ${showChat ? "cursor-pointer" : "cursor-default"
-            }`}
-        >
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/[0.12] bg-white/[0.04]">
-            <FiFolder className="text-[20px] text-neutral-300" />
-          </div>
+        <div className="flex items-center gap-3">
+          {/* ==================================================
+              MOBILE CHAT HISTORY BUTTON
+          ================================================== */}
 
-          <span className="text-[18px] font-medium tracking-tight text-neutral-200">
-            Zentra
-          </span>
-        </button>
+          {showHistory && (
+            <button
+              type="button"
+              onClick={handleHistory}
+              aria-label="Open chat history"
+              className="
+                flex
+                h-11
+                w-11
+                items-center
+                justify-center
+                rounded-xl
+                border
+                border-white/[0.08]
+                bg-white/[0.035]
+                text-neutral-400
+                transition
+                hover:border-white/[0.14]
+                hover:bg-white/[0.07]
+                hover:text-white
+                lg:hidden
+              "
+            >
+              <FiMenu className="text-lg" />
+            </button>
+          )}
+
+          {/* ==================================================
+              BRAND
+          ================================================== */}
+
+          <button
+            type="button"
+            onClick={showChat ? handleChat : undefined}
+            className={`flex items-center gap-4 ${showChat ? "cursor-pointer" : "cursor-default"
+              }`}
+          >
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/[0.12] bg-white/[0.04]">
+              <FiFolder className="text-[20px] text-neutral-300" />
+            </div>
+
+            <span className="text-[18px] font-medium tracking-tight text-neutral-200">
+              Zentra
+            </span>
+          </button>
+        </div>
 
         {/* ==================================================
             RIGHT
@@ -175,7 +223,10 @@ function Navbar({
               "
             >
               <FiRefreshCw />
-              <span>Sync another folder</span>
+              <span className="hidden sm:inline">
+                Sync another folder
+              </span>
+              <span className="sm:hidden">Sync</span>
             </button>
           )}
 

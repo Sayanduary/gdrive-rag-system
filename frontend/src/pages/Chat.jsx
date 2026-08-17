@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+
 import {
   FiArrowUp,
   FiEdit2,
@@ -9,6 +10,7 @@ import {
   FiShield,
   FiTrash2,
   FiUser,
+  FiX,
 } from "react-icons/fi";
 
 import api from "../services/api";
@@ -41,6 +43,9 @@ function Chat({ user, onSyncAnotherFolder }) {
   const [loadingConversations, setLoadingConversations] = useState(true);
   const [error, setError] = useState("");
 
+  // Mobile sidebar
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+
   // ==================================================
   // REFS
   // ==================================================
@@ -69,6 +74,41 @@ function Chat({ user, onSyncAnotherFolder }) {
       });
     });
   }, [messages, loading]);
+
+  // ==================================================
+  // CLOSE MOBILE SIDEBAR WITH ESC
+  // ==================================================
+
+  useEffect(() => {
+    function handleEscape(event) {
+      if (event.key === "Escape") {
+        setMobileSidebarOpen(false);
+      }
+    }
+
+    document.addEventListener("keydown", handleEscape);
+
+    return () => {
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, []);
+
+  // ==================================================
+  // PREVENT BODY SCROLL WHEN MOBILE SIDEBAR IS OPEN
+  // ==================================================
+
+  useEffect(() => {
+    if (!mobileSidebarOpen) {
+      document.body.style.overflow = "";
+      return;
+    }
+
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [mobileSidebarOpen]);
 
   // ==================================================
   // INITIAL LOAD
@@ -102,7 +142,7 @@ function Chat({ user, onSyncAnotherFolder }) {
         const savedId = localStorage.getItem(ACTIVE_CHAT_KEY);
 
         const savedConversation = items.find(
-          (item) => String(item.id) === savedId,
+          (item) => String(item.id) === savedId
         );
 
         const conversationToOpen = savedConversation || items[0];
@@ -111,7 +151,8 @@ function Chat({ user, onSyncAnotherFolder }) {
       } catch (error) {
         if (!ignore) {
           setError(
-            error.response?.data?.detail || "Failed to load conversations.",
+            error.response?.data?.detail ||
+            "Failed to load conversations."
           );
         }
       } finally {
@@ -140,15 +181,23 @@ function Chat({ user, onSyncAnotherFolder }) {
     try {
       setError("");
 
-      const response = await api.get(`/api/conversations/${conversationId}`);
+      const response = await api.get(
+        `/api/conversations/${conversationId}`
+      );
 
       setMessages(response.data.messages || []);
 
       setActiveConversationId(conversationId);
 
-      localStorage.setItem(ACTIVE_CHAT_KEY, String(conversationId));
+      localStorage.setItem(
+        ACTIVE_CHAT_KEY,
+        String(conversationId)
+      );
     } catch (error) {
-      setError(error.response?.data?.detail || "Failed to load conversation.");
+      setError(
+        error.response?.data?.detail ||
+        "Failed to load conversation."
+      );
     }
   }
 
@@ -180,18 +229,25 @@ function Chat({ user, onSyncAnotherFolder }) {
         updated_at: now,
       };
 
-      setConversations((previous) => [newConversation, ...previous]);
+      setConversations((previous) => [
+        newConversation,
+        ...previous,
+      ]);
 
       setActiveConversationId(conversationId);
 
-      localStorage.setItem(ACTIVE_CHAT_KEY, String(conversationId));
+      localStorage.setItem(
+        ACTIVE_CHAT_KEY,
+        String(conversationId)
+      );
 
       setMessages([]);
       setQuestion("");
       setError("");
     } catch (error) {
       setError(
-        error.response?.data?.detail || "Failed to create conversation.",
+        error.response?.data?.detail ||
+        "Failed to create conversation."
       );
     }
   }
@@ -226,7 +282,10 @@ function Chat({ user, onSyncAnotherFolder }) {
         title,
       });
     } catch (error) {
-      console.error("Failed to update conversation title:", error);
+      console.error(
+        "Failed to update conversation title:",
+        error
+      );
     }
   }
 
@@ -242,10 +301,12 @@ function Chat({ user, onSyncAnotherFolder }) {
     try {
       setError("");
 
-      await api.delete(`/api/conversations/${conversationId}`);
+      await api.delete(
+        `/api/conversations/${conversationId}`
+      );
 
       const remaining = conversations.filter(
-        (conversation) => conversation.id !== conversationId,
+        (conversation) => conversation.id !== conversationId
       );
 
       setConversations(remaining);
@@ -262,7 +323,8 @@ function Chat({ user, onSyncAnotherFolder }) {
       }
     } catch (error) {
       setError(
-        error.response?.data?.detail || "Failed to delete conversation.",
+        error.response?.data?.detail ||
+        "Failed to delete conversation."
       );
     }
   }
@@ -276,7 +338,10 @@ function Chat({ user, onSyncAnotherFolder }) {
       return;
     }
 
-    const title = window.prompt("Conversation title:", conversation.title);
+    const title = window.prompt(
+      "Conversation title:",
+      conversation.title
+    );
 
     if (title === null || !title.trim()) {
       return;
@@ -285,23 +350,27 @@ function Chat({ user, onSyncAnotherFolder }) {
     try {
       const newTitle = title.trim();
 
-      await api.patch(`/api/conversations/${conversation.id}`, {
-        title: newTitle,
-      });
+      await api.patch(
+        `/api/conversations/${conversation.id}`,
+        {
+          title: newTitle,
+        }
+      );
 
       setConversations((previous) =>
         previous.map((item) =>
           item.id === conversation.id
             ? {
-                ...item,
-                title: newTitle,
-              }
-            : item,
-        ),
+              ...item,
+              title: newTitle,
+            }
+            : item
+        )
       );
     } catch (error) {
       setError(
-        error.response?.data?.detail || "Failed to rename conversation.",
+        error.response?.data?.detail ||
+        "Failed to rename conversation."
       );
     }
   }
@@ -386,7 +455,8 @@ function Chat({ user, onSyncAnotherFolder }) {
     // Automatically generate title
     // ----------------------------------------------
 
-    const generatedTitle = generateChatTitle(currentQuestion);
+    const generatedTitle =
+      generateChatTitle(currentQuestion);
 
     // ----------------------------------------------
     // Update sidebar immediately
@@ -397,14 +467,17 @@ function Chat({ user, onSyncAnotherFolder }) {
         previous.map((conversation) =>
           conversation.id === activeConversationId
             ? {
-                ...conversation,
-                title: generatedTitle,
-              }
-            : conversation,
-        ),
+              ...conversation,
+              title: generatedTitle,
+            }
+            : conversation
+        )
       );
 
-      updateChatTitle(activeConversationId, generatedTitle);
+      updateChatTitle(
+        activeConversationId,
+        generatedTitle
+      );
     }
 
     // ----------------------------------------------
@@ -434,18 +507,9 @@ function Chat({ user, onSyncAnotherFolder }) {
     setQuestion("");
 
     try {
-      // IMPORTANT:
-      // Always use the Vercel same-origin API.
-      // Do NOT use VITE_API_BASE_URL here.
-      //
-      // Vercel:
-      // /api/query/stream
-      //
-      // rewrites to Render:
-      // /api/query/stream
-      //
-      // This keeps the browser on the Vercel
-      // origin so the session cookie is included.
+      // ----------------------------------------------
+      // Vercel same-origin API
+      // ----------------------------------------------
 
       const response = await fetch("/api/query/stream", {
         method: "POST",
@@ -459,7 +523,6 @@ function Chat({ user, onSyncAnotherFolder }) {
 
         body: JSON.stringify({
           question: currentQuestion,
-
           conversation_id: activeConversationId,
         }),
       });
@@ -487,7 +550,9 @@ function Chat({ user, onSyncAnotherFolder }) {
       // ------------------------------------------
 
       if (!response.body) {
-        throw new Error("Streaming response is unavailable.");
+        throw new Error(
+          "Streaming response is unavailable."
+        );
       }
 
       const reader = response.body.getReader();
@@ -529,35 +594,42 @@ function Chat({ user, onSyncAnotherFolder }) {
           // ==========================================
 
           if (eventName === "metadata") {
-            const conversationId = data.conversation_id;
+            const conversationId =
+              data.conversation_id;
 
             if (conversationId) {
               setActiveConversationId(conversationId);
 
-              localStorage.setItem(ACTIVE_CHAT_KEY, String(conversationId));
+              localStorage.setItem(
+                ACTIVE_CHAT_KEY,
+                String(conversationId)
+              );
 
-              // If backend created the
-              // conversation during request,
-              // update title there.
+              // If backend created the conversation
+              // during request, update title there.
 
               if (isFirstMessage && conversationId) {
                 setConversations((previous) =>
                   previous.map((conversation) =>
                     conversation.id === conversationId
                       ? {
-                          ...conversation,
-                          id: conversationId,
-                          title: generatedTitle,
-                        }
-                      : conversation,
-                  ),
+                        ...conversation,
+                        id: conversationId,
+                        title: generatedTitle,
+                      }
+                      : conversation
+                  )
                 );
 
-                updateChatTitle(conversationId, generatedTitle);
+                updateChatTitle(
+                  conversationId,
+                  generatedTitle
+                );
               }
             }
 
-            pendingSourcesRef.current = data.sources || [];
+            pendingSourcesRef.current =
+              data.sources || [];
 
             continue;
           }
@@ -585,7 +657,9 @@ function Chat({ user, onSyncAnotherFolder }) {
               updated[lastIndex] = {
                 ...updated[lastIndex],
 
-                content: (updated[lastIndex].content || "") + token,
+                content:
+                  (updated[lastIndex].content || "") +
+                  token,
               };
 
               return updated;
@@ -600,7 +674,9 @@ function Chat({ user, onSyncAnotherFolder }) {
 
           if (eventName === "error") {
             throw new Error(
-              data.message || data.content || "Generation failed.",
+              data.message ||
+              data.content ||
+              "Generation failed."
             );
           }
 
@@ -609,7 +685,8 @@ function Chat({ user, onSyncAnotherFolder }) {
           // ==========================================
 
           if (eventName === "done") {
-            const finalSources = pendingSourcesRef.current || [];
+            const finalSources =
+              pendingSourcesRef.current || [];
 
             setMessages((previous) => {
               if (previous.length === 0) {
@@ -635,14 +712,18 @@ function Chat({ user, onSyncAnotherFolder }) {
         }
       }
     } catch (error) {
-      // Remove optimistic user +
-      // assistant messages.
+      // Remove optimistic user + assistant messages.
 
-      setMessages((previous) => previous.slice(0, -2));
+      setMessages((previous) =>
+        previous.slice(0, -2)
+      );
 
       pendingSourcesRef.current = [];
 
-      setError(error.message || "Failed to generate an answer.");
+      setError(
+        error.message ||
+        "Failed to generate an answer."
+      );
     } finally {
       requestInFlightRef.current = false;
 
@@ -655,8 +736,12 @@ function Chat({ user, onSyncAnotherFolder }) {
   // ==================================================
 
   function handleKeyDown(event) {
-    if (event.key === "Enter" && !event.shiftKey) {
+    if (
+      event.key === "Enter" &&
+      !event.shiftKey
+    ) {
       event.preventDefault();
+
       askQuestion();
     }
   }
@@ -666,13 +751,39 @@ function Chat({ user, onSyncAnotherFolder }) {
   // ==================================================
 
   function handleSyncAnotherFolder() {
-    if (typeof onSyncAnotherFolder === "function") {
+    if (
+      typeof onSyncAnotherFolder === "function"
+    ) {
       onSyncAnotherFolder();
     } else {
-      localStorage.removeItem("gdrive_rag_session");
+      localStorage.removeItem(
+        "gdrive_rag_session"
+      );
     }
 
     navigate("/analyze");
+  }
+
+  // ==================================================
+  // MOBILE: OPEN CONVERSATION
+  // ==================================================
+
+  async function handleMobileConversation(
+    conversationId
+  ) {
+    await loadConversation(conversationId);
+
+    setMobileSidebarOpen(false);
+  }
+
+  // ==================================================
+  // MOBILE: CREATE NEW CHAT
+  // ==================================================
+
+  async function handleMobileNewChat() {
+    await createNewChat();
+
+    setMobileSidebarOpen(false);
   }
 
   // ==================================================
@@ -682,7 +793,7 @@ function Chat({ user, onSyncAnotherFolder }) {
   return (
     <div className="relative min-h-screen overflow-hidden bg-[#0d0d0d] text-white">
       {/* ==================================================
-          BACKGROUND
+          BACKGROUND GRID
       ================================================== */}
 
       <div
@@ -712,6 +823,8 @@ function Chat({ user, onSyncAnotherFolder }) {
       <Navbar
         user={user}
         showSync={true}
+        showHistory={true}
+        onHistory={() => setMobileSidebarOpen(true)}
         onSyncAnotherFolder={handleSyncAnotherFolder}
       />
 
@@ -721,7 +834,7 @@ function Chat({ user, onSyncAnotherFolder }) {
 
       <div className="relative flex h-[calc(100dvh-84px)] overflow-hidden">
         {/* ==================================================
-            SIDEBAR
+            DESKTOP SIDEBAR
         ================================================== */}
 
         <aside className="hidden w-72 shrink-0 border-r border-white/[0.06] bg-[#101010]/80 backdrop-blur-xl lg:flex lg:flex-col">
@@ -733,6 +846,7 @@ function Chat({ user, onSyncAnotherFolder }) {
             </p>
 
             <button
+              type="button"
               onClick={createNewChat}
               disabled={loading}
               className="
@@ -767,51 +881,58 @@ function Chat({ user, onSyncAnotherFolder }) {
               </div>
             ) : conversations.length === 0 ? (
               <div className="px-2 py-4 text-xs leading-5 text-neutral-600">
-                No conversations yet. Start your first chat.
+                No conversations yet. Start your first
+                chat.
               </div>
             ) : (
               <div className="space-y-1">
                 {conversations.map((conversation) => {
                   const active =
-                    String(activeConversationId) === String(conversation.id);
+                    String(activeConversationId) ===
+                    String(conversation.id);
 
                   return (
                     <div
                       key={conversation.id}
                       className={`
-                          group
-                          flex
-                          items-center
-                          gap-1
-                          rounded-xl
-                          border
-                          transition
-                          ${
-                            active
-                              ? "border-white/[0.09] bg-white/[0.06]"
-                              : "border-transparent hover:bg-white/[0.035]"
-                          }
-                        `}
+                        group
+                        flex
+                        items-center
+                        gap-1
+                        rounded-xl
+                        border
+                        transition
+                        ${active
+                          ? "border-white/[0.09] bg-white/[0.06]"
+                          : "border-transparent hover:bg-white/[0.035]"
+                        }
+                      `}
                     >
                       {/* Conversation */}
 
                       <button
-                        onClick={() => loadConversation(conversation.id)}
+                        type="button"
+                        onClick={() =>
+                          loadConversation(
+                            conversation.id
+                          )
+                        }
                         disabled={loading}
                         className="
-                            min-w-0
-                            flex-1
-                            px-3
-                            py-2.5
-                            text-left
-                            disabled:opacity-50
-                          "
+                          min-w-0
+                          flex-1
+                          px-3
+                          py-2.5
+                          text-left
+                          disabled:opacity-50
+                        "
                       >
                         <div className="flex items-center gap-2">
                           <FiMessageSquare className="shrink-0 text-xs text-neutral-600" />
 
                           <span className="truncate text-xs text-neutral-300">
-                            {conversation.title || "New Chat"}
+                            {conversation.title ||
+                              "New Chat"}
                           </span>
                         </div>
                       </button>
@@ -819,22 +940,27 @@ function Chat({ user, onSyncAnotherFolder }) {
                       {/* Rename */}
 
                       <button
-                        onClick={() => renameConversation(conversation)}
+                        type="button"
+                        onClick={() =>
+                          renameConversation(
+                            conversation
+                          )
+                        }
                         disabled={loading}
                         className="
-                            hidden
-                            h-7
-                            w-7
-                            items-center
-                            justify-center
-                            rounded-lg
-                            text-neutral-700
-                            transition
-                            hover:bg-white/[0.06]
-                            hover:text-neutral-300
-                            group-hover:flex
-                            disabled:opacity-50
-                          "
+                          hidden
+                          h-7
+                          w-7
+                          items-center
+                          justify-center
+                          rounded-lg
+                          text-neutral-700
+                          transition
+                          hover:bg-white/[0.06]
+                          hover:text-neutral-300
+                          group-hover:flex
+                          disabled:opacity-50
+                        "
                         title="Rename"
                       >
                         <FiEdit2 className="text-xs" />
@@ -843,23 +969,28 @@ function Chat({ user, onSyncAnotherFolder }) {
                       {/* Delete */}
 
                       <button
-                        onClick={() => deleteConversation(conversation.id)}
+                        type="button"
+                        onClick={() =>
+                          deleteConversation(
+                            conversation.id
+                          )
+                        }
                         disabled={loading}
                         className="
-                            mr-1
-                            hidden
-                            h-7
-                            w-7
-                            items-center
-                            justify-center
-                            rounded-lg
-                            text-neutral-700
-                            transition
-                            hover:bg-red-500/[0.08]
-                            hover:text-red-400
-                            group-hover:flex
-                            disabled:opacity-50
-                          "
+                          mr-1
+                          hidden
+                          h-7
+                          w-7
+                          items-center
+                          justify-center
+                          rounded-lg
+                          text-neutral-700
+                          transition
+                          hover:bg-red-500/[0.08]
+                          hover:text-red-400
+                          group-hover:flex
+                          disabled:opacity-50
+                        "
                         title="Delete"
                       >
                         <FiTrash2 className="text-xs" />
@@ -875,6 +1006,7 @@ function Chat({ user, onSyncAnotherFolder }) {
 
           <div className="border-t border-white/[0.06] p-3">
             <button
+              type="button"
               onClick={createNewChat}
               disabled={loading}
               className="
@@ -904,6 +1036,254 @@ function Chat({ user, onSyncAnotherFolder }) {
         </aside>
 
         {/* ==================================================
+            MOBILE CHAT HISTORY DRAWER
+        ================================================== */}
+
+        {mobileSidebarOpen && (
+          <div className="fixed inset-x-0 bottom-0 top-[84px] z-[60] lg:hidden">
+            {/* BACKDROP */}
+
+            <button
+              type="button"
+              aria-label="Close chat history"
+              onClick={() =>
+                setMobileSidebarOpen(false)
+              }
+              className="
+                absolute
+                inset-0
+                cursor-default
+                bg-black/60
+                backdrop-blur-[2px]
+              "
+            />
+
+            {/* DRAWER */}
+
+            <aside
+              className="
+                relative
+                flex
+                h-full
+                w-[min(86vw,320px)]
+                flex-col
+                border-r
+                border-white/[0.08]
+                bg-[#101010]
+                shadow-2xl
+              "
+            >
+              {/* Drawer Header */}
+
+              <div className="flex items-center justify-between border-b border-white/[0.06] p-4">
+                <div>
+                  <p className="text-sm font-medium text-neutral-200">
+                    Conversations
+                  </p>
+
+                  <p className="mt-0.5 text-[10px] text-neutral-600">
+                    Chat history
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setMobileSidebarOpen(false)
+                  }
+                  className="
+                    flex
+                    h-8
+                    w-8
+                    items-center
+                    justify-center
+                    rounded-lg
+                    border
+                    border-white/[0.08]
+                    bg-white/[0.04]
+                    text-neutral-500
+                    transition
+                    hover:bg-white/[0.08]
+                    hover:text-white
+                  "
+                  aria-label="Close chat history"
+                >
+                  <FiX className="text-sm" />
+                </button>
+              </div>
+
+              {/* New Conversation */}
+
+              <div className="border-b border-white/[0.06] p-3">
+                <button
+                  type="button"
+                  onClick={handleMobileNewChat}
+                  disabled={loading}
+                  className="
+                    flex
+                    w-full
+                    items-center
+                    justify-center
+                    gap-2
+                    rounded-xl
+                    border
+                    border-white/[0.08]
+                    bg-white/[0.04]
+                    px-3
+                    py-2.5
+                    text-xs
+                    font-medium
+                    text-neutral-300
+                    transition
+                    hover:bg-white/[0.08]
+                    hover:text-white
+                    disabled:cursor-not-allowed
+                    disabled:opacity-50
+                  "
+                >
+                  <FiPlus />
+                  New conversation
+                </button>
+              </div>
+
+              {/* Mobile Conversation List */}
+
+              <div className="flex-1 overflow-y-auto p-3">
+                {loadingConversations ? (
+                  <div className="px-2 py-4 text-xs text-neutral-600">
+                    Loading conversations...
+                  </div>
+                ) : conversations.length === 0 ? (
+                  <div className="px-2 py-4 text-xs leading-5 text-neutral-600">
+                    No conversations yet. Start your
+                    first chat.
+                  </div>
+                ) : (
+                  <div className="space-y-1">
+                    {conversations.map(
+                      (conversation) => {
+                        const active =
+                          String(
+                            activeConversationId
+                          ) ===
+                          String(conversation.id);
+
+                        return (
+                          <div
+                            key={conversation.id}
+                            className={`
+                              group
+                              flex
+                              items-center
+                              gap-1
+                              rounded-xl
+                              border
+                              transition
+                              ${active
+                                ? "border-white/[0.09] bg-white/[0.06]"
+                                : "border-transparent hover:bg-white/[0.035]"
+                              }
+                            `}
+                          >
+                            {/* Conversation */}
+
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleMobileConversation(
+                                  conversation.id
+                                )
+                              }
+                              disabled={loading}
+                              className="
+                                min-w-0
+                                flex-1
+                                px-3
+                                py-3
+                                text-left
+                                disabled:opacity-50
+                              "
+                            >
+                              <div className="flex items-center gap-2">
+                                <FiMessageSquare className="shrink-0 text-xs text-neutral-600" />
+
+                                <span className="truncate text-xs text-neutral-300">
+                                  {conversation.title ||
+                                    "New Chat"}
+                                </span>
+                              </div>
+                            </button>
+
+                            {/* Rename */}
+
+                            <button
+                              type="button"
+                              onClick={() =>
+                                renameConversation(
+                                  conversation
+                                )
+                              }
+                              disabled={loading}
+                              className="
+                                flex
+                                h-8
+                                w-8
+                                shrink-0
+                                items-center
+                                justify-center
+                                rounded-lg
+                                text-neutral-700
+                                transition
+                                hover:bg-white/[0.06]
+                                hover:text-neutral-300
+                                disabled:opacity-50
+                              "
+                              title="Rename"
+                            >
+                              <FiEdit2 className="text-xs" />
+                            </button>
+
+                            {/* Delete */}
+
+                            <button
+                              type="button"
+                              onClick={() =>
+                                deleteConversation(
+                                  conversation.id
+                                )
+                              }
+                              disabled={loading}
+                              className="
+                                mr-1
+                                flex
+                                h-8
+                                w-8
+                                shrink-0
+                                items-center
+                                justify-center
+                                rounded-lg
+                                text-neutral-700
+                                transition
+                                hover:bg-red-500/[0.08]
+                                hover:text-red-400
+                                disabled:opacity-50
+                              "
+                              title="Delete"
+                            >
+                              <FiTrash2 className="text-xs" />
+                            </button>
+                          </div>
+                        );
+                      }
+                    )}
+                  </div>
+                )}
+              </div>
+            </aside>
+          </div>
+        )}
+
+        {/* ==================================================
             MAIN CHAT
         ================================================== */}
 
@@ -925,7 +1305,9 @@ function Chat({ user, onSyncAnotherFolder }) {
             <div className="mx-auto w-full max-w-3xl pb-4">
               {/* Empty State */}
 
-              {messages.length === 0 && !loading && !error ? (
+              {messages.length === 0 &&
+                !loading &&
+                !error ? (
                 <div className="flex min-h-[calc(100vh-260px)] items-center justify-center">
                   <div className="w-full max-w-2xl text-center">
                     <div className="mx-auto mb-6 flex h-14 w-14 items-center justify-center rounded-2xl border border-white/[0.09] bg-white/[0.04]">
@@ -937,14 +1319,17 @@ function Chat({ user, onSyncAnotherFolder }) {
                     </h1>
 
                     <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-neutral-500">
-                      Ask questions about the documents in your Google Drive
-                      knowledge base.
+                      Ask questions about the documents in
+                      your Google Drive knowledge base.
                     </p>
 
                     <div className="mt-8 grid grid-cols-1 gap-3 sm:grid-cols-2">
                       <button
+                        type="button"
                         onClick={() =>
-                          setQuestion("How many documents are available?")
+                          setQuestion(
+                            "How many documents are available?"
+                          )
                         }
                         className="
                           rounded-xl
@@ -968,8 +1353,11 @@ function Chat({ user, onSyncAnotherFolder }) {
                       </button>
 
                       <button
+                        type="button"
                         onClick={() =>
-                          setQuestion("Summarize the important information.")
+                          setQuestion(
+                            "Summarize the important information."
+                          )
                         }
                         className="
                           rounded-xl
@@ -999,10 +1387,13 @@ function Chat({ user, onSyncAnotherFolder }) {
                   {/* Messages */}
 
                   {messages.map((message, index) => {
-                    const isLastMessage = index === messages.length - 1;
+                    const isLastMessage =
+                      index === messages.length - 1;
 
                     const isGenerating =
-                      loading && isLastMessage && message.role === "assistant";
+                      loading &&
+                      isLastMessage &&
+                      message.role === "assistant";
 
                     return (
                       <div
@@ -1066,7 +1457,8 @@ function Chat({ user, onSyncAnotherFolder }) {
                                 {/* Sources */}
 
                                 {!isGenerating &&
-                                  message.sources?.length > 0 && (
+                                  message.sources?.length >
+                                  0 && (
                                     <div className="mt-6">
                                       <div className="mb-3 flex items-center gap-2">
                                         <FiFileText className="text-xs text-neutral-600" />
@@ -1078,10 +1470,22 @@ function Chat({ user, onSyncAnotherFolder }) {
 
                                       <div className="space-y-2">
                                         {message.sources.map(
-                                          (source, sourceIndex) => (
+                                          (
+                                            source,
+                                            sourceIndex
+                                          ) => (
                                             <div
-                                              key={sourceIndex}
-                                              className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3"
+                                              key={
+                                                sourceIndex
+                                              }
+                                              className="
+                                                rounded-xl
+                                                border
+                                                border-white/[0.06]
+                                                bg-white/[0.02]
+                                                px-4
+                                                py-3
+                                              "
                                             >
                                               <div className="flex items-start gap-3">
                                                 <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/[0.04]">
@@ -1090,22 +1494,30 @@ function Chat({ user, onSyncAnotherFolder }) {
 
                                                 <div className="min-w-0">
                                                   <p className="truncate text-xs font-medium text-neutral-300">
-                                                    {source.file_name}
+                                                    {
+                                                      source.file_name
+                                                    }
                                                   </p>
 
                                                   <p className="mt-0.5 text-[10px] text-neutral-600">
-                                                    Chunk {source.chunk_id}
+                                                    Chunk{" "}
+                                                    {
+                                                      source.chunk_id
+                                                    }
+
                                                     {source.path && (
                                                       <>
                                                         {" · "}
-                                                        {source.path}
+                                                        {
+                                                          source.path
+                                                        }
                                                       </>
                                                     )}
                                                   </p>
                                                 </div>
                                               </div>
                                             </div>
-                                          ),
+                                          )
                                         )}
                                       </div>
                                     </div>
@@ -1118,7 +1530,10 @@ function Chat({ user, onSyncAnotherFolder }) {
                     );
                   })}
 
-                  <div ref={messagesEndRef} className="h-1" />
+                  <div
+                    ref={messagesEndRef}
+                    className="h-1"
+                  />
                 </div>
               )}
 
@@ -1133,15 +1548,17 @@ function Chat({ user, onSyncAnotherFolder }) {
           </div>
 
           {/* ==================================================
-              COMPOSER (STICKY CHAT BOX AT BOTTOM)
+              COMPOSER
           ================================================== */}
 
-          <div className="sticky bottom-0 z-40 shrink-0 w-full bg-[#0d0d0d] border-t border-white/[0.06] px-4 py-3 sm:px-6 sm:py-4">
+          <div className="sticky bottom-0 z-40 w-full shrink-0 border-t border-white/[0.06] bg-[#0d0d0d] px-4 py-3 sm:px-6 sm:py-4">
             <div className="mx-auto w-full max-w-3xl">
               <div className="rounded-2xl border border-white/[0.09] bg-[#151515] p-2 shadow-2xl backdrop-blur-xl">
                 <textarea
                   value={question}
-                  onChange={(event) => setQuestion(event.target.value)}
+                  onChange={(event) =>
+                    setQuestion(event.target.value)
+                  }
                   onKeyDown={handleKeyDown}
                   placeholder="Ask anything about your documents..."
                   rows={1}
@@ -1166,12 +1583,16 @@ function Chat({ user, onSyncAnotherFolder }) {
                 <div className="flex items-center justify-between px-2 pb-1 pt-1">
                   <div className="hidden items-center gap-1.5 text-[10px] text-neutral-700 sm:flex">
                     <FiShield />
+
                     <span>Drive documents</span>
                   </div>
 
                   <button
+                    type="button"
                     onClick={askQuestion}
-                    disabled={loading || !question.trim()}
+                    disabled={
+                      loading || !question.trim()
+                    }
                     className="
                       ml-auto
                       flex
@@ -1195,8 +1616,8 @@ function Chat({ user, onSyncAnotherFolder }) {
               </div>
 
               <p className="mt-2 text-center text-[10px] text-neutral-600">
-                AI-generated answers are based on your indexed Google Drive
-                documents.
+                AI-generated answers are based on your
+                indexed Google Drive documents.
               </p>
             </div>
           </div>
