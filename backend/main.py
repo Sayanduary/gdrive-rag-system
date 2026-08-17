@@ -45,8 +45,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:5173",
-        # Add your Vercel URL after deployment
-        # "https://your-app.vercel.app",
+        "https://gdrive-rag-system.vercel.app"
     ],
     allow_credentials=True,
     allow_methods=["*"],
