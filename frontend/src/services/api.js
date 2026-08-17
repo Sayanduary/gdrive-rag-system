@@ -1,12 +1,19 @@
 import axios from "axios";
 
-// Use ?? (not ||) so that an empty string VITE_API_BASE_URL="" is kept as ""
-// (relative URLs → Vercel same-origin proxy) and not fallen back to the
-// hardcoded Render URL.
-// Local dev: VITE_API_BASE_URL=http://localhost:8000  → direct call to local backend
-// Production: VITE_API_BASE_URL=  (empty) → relative /api/* → Vercel proxy → Render
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL ?? "https://gdrive-rag-system-h5sf.onrender.com";
+// Determine base URL:
+// In production (Vercel deployment or non-localhost), ALWAYS use relative URL ("")
+// so requests pass through Vercel's same-origin proxy (/api/* -> Render backend).
+// This guarantees session cookies are set/sent as 1st-party cookies, avoiding browser
+// 3rd-party cookie blocks.
+// In local development (localhost), use VITE_API_BASE_URL or fallback to http://localhost:8000.
+const isLocalhost =
+  typeof window !== "undefined" &&
+  (window.location.hostname === "localhost" ||
+    window.location.hostname === "127.0.0.1");
+
+const API_BASE_URL = isLocalhost
+  ? import.meta.env.VITE_API_BASE_URL || "http://localhost:8000"
+  : "";
 
 console.log(
   "ZENTRA API BASE URL:",
