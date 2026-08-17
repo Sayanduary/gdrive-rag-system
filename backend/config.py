@@ -67,12 +67,12 @@ class Settings(BaseSettings):
 
     # Normal RAG / chat generation
     GROQ_LLM_MODEL: str = (
-        "llama-3.3-70b-versatile"
+        "openai/gpt-oss-120b"
     )
 
     # Scanned PDF / image OCR
     GROQ_VISION_MODEL: str = (
-        "llama-3.2-11b-vision-preview"
+        "qwen/qwen3.6-27b"
     )
 
     # ==================================================
