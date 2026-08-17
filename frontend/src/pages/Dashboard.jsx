@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 
+import { useNavigate } from "react-router-dom";
+
 import {
   FiChevronRight,
   FiDatabase,
@@ -22,7 +24,7 @@ function Dashboard({ user, onChat }) {
   const [selectedFiles, setSelectedFiles] = useState([]);
 
   const [loading, setLoading] = useState(true);
-
+  const navigate = useNavigate();
   const [loadingFiles, setLoadingFiles] = useState(false);
 
   const [error, setError] = useState("");

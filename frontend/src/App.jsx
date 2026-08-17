@@ -1,12 +1,15 @@
 import { useEffect, useState } from "react";
-import { Routes, Route, Navigate } from "react-router-dom";
+import { Routes, Route, Navigate, useNavigate } from "react-router-dom";
 
 import api from "./services/api";
+
 import Login from "./pages/Login";
+import Dashboard from "./pages/Dashboard";
 import Analyze from "./pages/Analyze";
 import Chat from "./pages/Chat";
 
 const STORAGE_KEY = "gdrive_rag_session";
+
 const ACTIVE_CHAT_KEY = "gdrive_rag_active_conversation";
 
 // ==================================================
@@ -42,7 +45,7 @@ function ProtectedRoute({ user, checkingAuth, children }) {
 }
 
 // ==================================================
-// CHECK SAVED DRIVE SESSION
+// CHECK OLD LOCAL ANALYSIS SESSION
 // ==================================================
 
 function getSavedAnalysis() {
@@ -75,6 +78,7 @@ function getSavedAnalysis() {
 
 function App() {
   const [user, setUser] = useState(null);
+
   const [checkingAuth, setCheckingAuth] = useState(true);
 
   const [analysis, setAnalysis] = useState(null);
@@ -96,9 +100,9 @@ function App() {
           return;
         }
 
-        // --------------------------------------------
+        // ============================================
         // NOT AUTHENTICATED
-        // --------------------------------------------
+        // ============================================
 
         if (!response.data?.authenticated) {
           setUser(null);
@@ -111,15 +115,17 @@ function App() {
           return;
         }
 
-        // --------------------------------------------
+        // ============================================
         // AUTHENTICATED
-        // --------------------------------------------
+        // ============================================
 
-        setUser(response.data.user || null);
+        const authenticatedUser = response.data.user || null;
 
-        // --------------------------------------------
-        // RESTORE ANALYZED FOLDER
-        // --------------------------------------------
+        setUser(authenticatedUser);
+
+        // ============================================
+        // RESTORE LEGACY LOCAL ANALYSIS
+        // ============================================
 
         const savedSession = getSavedAnalysis();
 
@@ -160,12 +166,6 @@ function App() {
   function handleAnalysisComplete(newAnalysis, folderUrl) {
     setAnalysis(newAnalysis);
 
-    /*
-     * Analyze.jsx normally saves this already.
-     * We save it here as well so App state and
-     * localStorage stay synchronized.
-     */
-
     if (newAnalysis && folderUrl) {
       localStorage.setItem(
         STORAGE_KEY,
@@ -198,7 +198,7 @@ function App() {
   }
 
   // ==================================================
-  // ROOT REDIRECT
+  // ROOT
   // ==================================================
 
   function RootRoute() {
@@ -215,26 +215,13 @@ function App() {
     }
 
     // --------------------------------------------
-    // CHECK ANALYZED FOLDER
+    // AUTHENTICATED
+    //
+    // Dashboard is now always the first
+    // authenticated page.
     // --------------------------------------------
 
-    const savedSession = getSavedAnalysis();
-
-    const hasAnalyzedFolder = Boolean(analysis || savedSession);
-
-    // --------------------------------------------
-    // ANALYZED FOLDER EXISTS
-    // --------------------------------------------
-
-    if (hasAnalyzedFolder) {
-      return <Navigate to="/chat" replace />;
-    }
-
-    // --------------------------------------------
-    // NO ANALYZED FOLDER
-    // --------------------------------------------
-
-    return <Navigate to="/analyze" replace />;
+    return <Navigate to="/dashboard" replace />;
   }
 
   // ==================================================
@@ -243,14 +230,31 @@ function App() {
 
   return (
     <Routes>
-      {/* LOGIN */}
+      {/* ============================================
+          LOGIN
+      ============================================ */}
 
       <Route
         path="/login"
         element={<Login user={user} checkingAuth={checkingAuth} />}
       />
 
-      {/* ANALYZE */}
+      {/* ============================================
+          DASHBOARD
+      ============================================ */}
+
+      <Route
+        path="/dashboard"
+        element={
+          <ProtectedRoute user={user} checkingAuth={checkingAuth}>
+            <Dashboard user={user} />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* ============================================
+          ANALYZE
+      ============================================ */}
 
       <Route
         path="/analyze"
@@ -261,7 +265,9 @@ function App() {
         }
       />
 
-      {/* CHAT */}
+      {/* ============================================
+          CHAT
+      ============================================ */}
 
       <Route
         path="/chat"
@@ -276,11 +282,15 @@ function App() {
         }
       />
 
-      {/* ROOT */}
+      {/* ============================================
+          ROOT
+      ============================================ */}
 
       <Route path="/" element={<RootRoute />} />
 
-      {/* UNKNOWN */}
+      {/* ============================================
+          UNKNOWN
+      ============================================ */}
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

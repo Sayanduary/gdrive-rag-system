@@ -45,7 +45,7 @@ function Analyze({ user, onAnalysisComplete }) {
       }
 
       // Navigate to chat after successful analysis
-      navigate("/chat");
+      navigate("/dashboard");
     } catch (err) {
       setError(err.response?.data?.detail || "Failed to analyze folder.");
     } finally {
@@ -85,12 +85,18 @@ function Analyze({ user, onAnalysisComplete }) {
       <div className="pointer-events-none fixed bottom-[-300px] left-[10%] h-[500px] w-[500px] rounded-full bg-white/[0.012] blur-[120px]" />
 
       {/* Existing Navbar */}
-      <Navbar user={user} showChat={true} onChat={handleGoToChat} />
+      <Navbar
+        user={user}
+        showDashboard={true}
+        showChat={true}
+        onDashboard={() => navigate("/dashboard")}
+        onChat={handleGoToChat}
+        activeTab=""
+      />
 
       {/* Main */}
       <main className="relative mx-auto flex min-h-[calc(100vh-84px)] max-w-6xl items-center justify-center px-5 py-12 sm:px-8 lg:px-10">
         <div className="w-full max-w-2xl">
-
           {/* ==================================================
             INTRO
         ================================================== */}
@@ -114,8 +120,8 @@ function Analyze({ user, onAnalysisComplete }) {
             </h1>
 
             <p className="mx-auto mt-4 max-w-lg text-sm leading-6 text-neutral-500">
-              Choose a Google Drive folder and turn its documents
-              into a searchable AI knowledge base.
+              Choose a Google Drive folder and turn its documents into a
+              searchable AI knowledge base.
             </p>
           </div>
 
@@ -124,16 +130,13 @@ function Analyze({ user, onAnalysisComplete }) {
         ================================================== */}
 
           <div className="relative overflow-hidden rounded-3xl border border-white/[0.08] bg-white/[0.025] shadow-2xl backdrop-blur-2xl">
-
             {/* Top highlight */}
             <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/[0.12] to-transparent" />
 
             <div className="p-5 sm:p-7">
-
               {/* Card heading */}
               <div className="mb-6">
                 <div className="flex items-center gap-3">
-
                   <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/[0.07] bg-white/[0.03]">
                     <FiFolder className="text-sm text-neutral-500" />
                   </div>
@@ -147,7 +150,6 @@ function Analyze({ user, onAnalysisComplete }) {
                       Paste the URL of the folder you want to analyze.
                     </p>
                   </div>
-
                 </div>
               </div>
 
@@ -166,10 +168,11 @@ function Analyze({ user, onAnalysisComplete }) {
                 p-1.5
                 transition-all
                 duration-200
-                ${error
+                ${
+                  error
                     ? "border-red-500/40"
                     : "border-white/[0.08] focus-within:border-white/[0.18] focus-within:bg-black/30"
-                  }
+                }
               `}
               >
                 {/* Input icon */}
@@ -264,7 +267,6 @@ function Analyze({ user, onAnalysisComplete }) {
 
               <div className="mt-5 rounded-2xl border border-white/[0.06] bg-black/20 p-4">
                 <div className="flex items-start gap-3">
-
                   <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-white/[0.06] bg-white/[0.025]">
                     <FiShield className="text-sm text-neutral-500" />
                   </div>
@@ -275,15 +277,13 @@ function Analyze({ user, onAnalysisComplete }) {
                     </p>
 
                     <p className="mt-1.5 text-[11px] leading-5 text-neutral-600">
-                      Make sure your Google account has access to
-                      the folder. Documents will be processed to
-                      build the RAG knowledge base.
+                      Make sure your Google account has access to the folder.
+                      Documents will be processed to build the RAG knowledge
+                      base.
                     </p>
                   </div>
-
                 </div>
               </div>
-
             </div>
 
             {/* ==================================================
@@ -291,15 +291,12 @@ function Analyze({ user, onAnalysisComplete }) {
           ================================================== */}
 
             <div className="grid grid-cols-3 border-t border-white/[0.06]">
-
               <div className="border-r border-white/[0.06] px-3 py-4 text-center">
                 <div className="text-[10px] font-medium uppercase tracking-wider text-neutral-700">
                   Step
                 </div>
 
-                <div className="mt-1 text-xs text-neutral-400">
-                  Connect
-                </div>
+                <div className="mt-1 text-xs text-neutral-400">Connect</div>
               </div>
 
               <div className="border-r border-white/[0.06] px-3 py-4 text-center">
@@ -307,9 +304,7 @@ function Analyze({ user, onAnalysisComplete }) {
                   Step
                 </div>
 
-                <div className="mt-1 text-xs text-neutral-400">
-                  Analyze
-                </div>
+                <div className="mt-1 text-xs text-neutral-400">Analyze</div>
               </div>
 
               <div className="px-3 py-4 text-center">
@@ -317,11 +312,8 @@ function Analyze({ user, onAnalysisComplete }) {
                   Step
                 </div>
 
-                <div className="mt-1 text-xs text-neutral-400">
-                  Chat
-                </div>
+                <div className="mt-1 text-xs text-neutral-400">Chat</div>
               </div>
-
             </div>
           </div>
 
@@ -329,12 +321,9 @@ function Analyze({ user, onAnalysisComplete }) {
           {user?.email && (
             <p className="mt-6 text-center text-[10px] tracking-wide text-neutral-700">
               Signed in as{" "}
-              <span className="text-neutral-600">
-                {user.email}
-              </span>
+              <span className="text-neutral-600">{user.email}</span>
             </p>
           )}
-
         </div>
       </main>
     </div>
