@@ -9,20 +9,22 @@ function Login({ user, checkingAuth }) {
   useEffect(() => {
     if (!checkingAuth && user) {
       const savedSession = localStorage.getItem("gdrive_rag_session");
+
       if (savedSession) {
-        navigate("/chat", { replace: true });
+        navigate("/chat", {
+          replace: true,
+        });
       } else {
-        navigate("/analyze", { replace: true });
+        navigate("/analyze", {
+          replace: true,
+        });
       }
     }
   }, [user, checkingAuth, navigate]);
 
   function login() {
-    const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL || "http://localhost:8000").replace(/\/$/, "");
-    window.location.href = `${apiBaseUrl}/api/auth/google`;
+    window.location.href = "/api/auth/google";
   }
-
-
 
   if (checkingAuth) {
     return (
@@ -37,7 +39,6 @@ function Login({ user, checkingAuth }) {
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-[#0d0d0d] text-white">
-      {/* Background Grid */}
       <div
         className="pointer-events-none absolute inset-0 opacity-[0.035]"
         style={{
@@ -56,7 +57,6 @@ function Login({ user, checkingAuth }) {
         }}
       />
 
-      {/* Glow */}
       <div className="pointer-events-none absolute left-1/2 top-[-300px] h-[600px] w-[600px] -translate-x-1/2 rounded-full bg-white/[0.025] blur-3xl" />
 
       <main className="relative flex min-h-screen items-center justify-center px-6">

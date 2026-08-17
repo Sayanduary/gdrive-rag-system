@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://gdrive-rag-system-h5sf.onrender.com/api/:path*"
+    }
+  ]
+}
