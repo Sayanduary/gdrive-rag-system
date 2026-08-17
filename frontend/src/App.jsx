@@ -8,9 +8,28 @@ import Dashboard from "./pages/Dashboard";
 import Analyze from "./pages/Analyze";
 import Chat from "./pages/Chat";
 
-const STORAGE_KEY = "gdrive_rag_session";
+// ==================================================
+// STORAGE HELPERS
+// ==================================================
 
-const ACTIVE_CHAT_KEY = "gdrive_rag_active_conversation";
+const LEGACY_STORAGE_KEY = "gdrive_rag_session";
+
+function getActiveChatKey(user) {
+  const userId = user?.sub || user?.email || "anonymous";
+
+  return `gdrive_rag_active_conversation_${userId}`;
+}
+
+function clearUserStorage(user) {
+  localStorage.removeItem(LEGACY_STORAGE_KEY);
+
+  if (user) {
+    localStorage.removeItem(getActiveChatKey(user));
+  }
+
+  // Remove old global key too.
+  localStorage.removeItem("gdrive_rag_active_conversation");
+}
 
 // ==================================================
 // LOADING SCREEN
@@ -66,44 +85,52 @@ function App() {
       try {
         setCheckingAuth(true);
 
-        const response = await api.get("/api/auth/me");
+        const response = await api.get("/api/auth/me", {
+          // Always ask the browser for the
+          // current session-backed response.
+          params: {
+            _: Date.now(),
+          },
+        });
 
         if (ignore) {
           return;
         }
 
-        // ============================================
+        console.log("CURRENT AUTH USER:", response.data?.user);
+
+        // ==========================================
         // NOT AUTHENTICATED
-        // ============================================
+        // ==========================================
 
         if (!response.data?.authenticated) {
           setUser(null);
-
           setAnalysis(null);
 
-          localStorage.removeItem(STORAGE_KEY);
-
-          localStorage.removeItem(ACTIVE_CHAT_KEY);
+          clearUserStorage(user);
 
           return;
         }
 
-        // ============================================
+        // ==========================================
         // AUTHENTICATED
-        // ============================================
+        // ==========================================
 
-        setUser(response.data.user || null);
+        const authenticatedUser = response.data?.user || null;
+
+        setUser(authenticatedUser);
+
+        // Do not restore old analysis state
+        // across users.
+        setAnalysis(null);
       } catch (error) {
         if (!ignore) {
           console.error("Authentication check failed:", error);
 
           setUser(null);
-
           setAnalysis(null);
 
-          localStorage.removeItem(STORAGE_KEY);
-
-          localStorage.removeItem(ACTIVE_CHAT_KEY);
+          clearUserStorage(user);
         }
       } finally {
         if (!ignore) {
@@ -128,10 +155,11 @@ function App() {
 
     if (newAnalysis && folderUrl) {
       localStorage.setItem(
-        STORAGE_KEY,
+        LEGACY_STORAGE_KEY,
         JSON.stringify({
           folderUrl,
           analysis: newAnalysis,
+          userId: user?.sub || null,
         }),
       );
     }
@@ -142,9 +170,13 @@ function App() {
   // ==================================================
 
   function clearSession() {
-    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(LEGACY_STORAGE_KEY);
 
-    localStorage.removeItem(ACTIVE_CHAT_KEY);
+    if (user) {
+      localStorage.removeItem(getActiveChatKey(user));
+    }
+
+    localStorage.removeItem("gdrive_rag_active_conversation");
 
     setAnalysis(null);
   }
@@ -167,21 +199,16 @@ function App() {
     } catch (error) {
       console.error("Logout failed:", error);
     } finally {
-      // Clear React authentication state
-      setUser(null);
+      clearUserStorage(user);
 
-      // Clear analysis state
       setAnalysis(null);
 
-      // Clear local state
-      localStorage.removeItem(STORAGE_KEY);
-
-      localStorage.removeItem(ACTIVE_CHAT_KEY);
+      setUser(null);
     }
   }
 
   // ==================================================
-  // ROOT
+  // ROOT ROUTE
   // ==================================================
 
   function RootRoute() {
@@ -195,6 +222,12 @@ function App() {
 
     return <Navigate to="/dashboard" replace />;
   }
+
+  // ==================================================
+  // USER-SPECIFIC COMPONENT KEY
+  // ==================================================
+
+  const userKey = user?.sub || user?.email || "anonymous";
 
   // ==================================================
   // ROUTES
@@ -219,7 +252,11 @@ function App() {
         path="/dashboard"
         element={
           <ProtectedRoute user={user} checkingAuth={checkingAuth}>
-            <Dashboard user={user} onLogout={handleLogout} />
+            <Dashboard
+              key={`dashboard-${userKey}`}
+              user={user}
+              onLogout={handleLogout}
+            />
           </ProtectedRoute>
         }
       />
@@ -233,6 +270,7 @@ function App() {
         element={
           <ProtectedRoute user={user} checkingAuth={checkingAuth}>
             <Analyze
+              key={`analyze-${userKey}`}
               user={user}
               onAnalysisComplete={handleAnalysisComplete}
               onLogout={handleLogout}
@@ -250,6 +288,7 @@ function App() {
         element={
           <ProtectedRoute user={user} checkingAuth={checkingAuth}>
             <Chat
+              key={`chat-${userKey}`}
               user={user}
               analysis={analysis}
               onSyncAnotherFolder={handleSyncAnotherFolder}
