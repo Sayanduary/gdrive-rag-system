@@ -1,7 +1,6 @@
 from fastembed import TextEmbedding
-from psycopg.rows import dict_row
-from psycopg_pool import ConnectionPool
 
+from app.db import get_db_pool
 from config import settings
 
 
@@ -13,24 +12,11 @@ class VectorStore:
 
     def __init__(self):
 
-        if not settings.DATABASE_URL:
-            raise ValueError(
-                "DATABASE_URL is not configured."
-            )
-
         self.embedding_model = TextEmbedding(
             model_name=settings.EMBEDDING_MODEL
         )
 
-        self.pool = ConnectionPool(
-            conninfo=settings.DATABASE_URL,
-            min_size=1,
-            max_size=10,
-            kwargs={
-                "row_factory": dict_row
-            },
-            open=True,
-        )
+        self.pool = get_db_pool()
 
     # ==================================================
     # CLOSE

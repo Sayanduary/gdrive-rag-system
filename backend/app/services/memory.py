@@ -1,9 +1,7 @@
 from datetime import datetime, timezone
 from typing import Any
 
-from psycopg.rows import dict_row
-from psycopg_pool import ConnectionPool
-
+from app.db import get_db_pool
 from config import settings
 
 
@@ -16,21 +14,7 @@ class ConversationMemory:
     """
 
     def __init__(self):
-        if not settings.DATABASE_URL:
-            raise RuntimeError(
-                "DATABASE_URL is not configured."
-            )
-
-        self.pool = ConnectionPool(
-            conninfo=settings.DATABASE_URL,
-            min_size=1,
-            max_size=5,
-            timeout=30,
-            kwargs={
-                "row_factory": dict_row,
-            },
-        )
-
+        self.pool = get_db_pool()
         self.create_tables()
 
     # ==================================================
