@@ -5,6 +5,10 @@ from groq import Groq
 from config import settings
 
 
+FALLBACK_LLM_MODEL = "llama-3.3-70b-versatile"
+FALLBACK_VISION_MODEL = "llama-3.2-11b-vision-preview"
+
+
 class GroqService:
 
     def __init__(self):
@@ -18,13 +22,19 @@ class GroqService:
             api_key=settings.GROQ_API_KEY
         )
 
-        self.llm_model = (
-            settings.GROQ_LLM_MODEL
-        )
+        # Validate LLM model
+        raw_llm = settings.GROQ_LLM_MODEL.strip()
+        if not raw_llm or "gpt-oss" in raw_llm or "/" in raw_llm:
+            self.llm_model = FALLBACK_LLM_MODEL
+        else:
+            self.llm_model = raw_llm
 
-        self.vision_model = (
-            settings.GROQ_VISION_MODEL
-        )
+        # Validate Vision model for OCR
+        raw_vision = settings.GROQ_VISION_MODEL.strip()
+        if not raw_vision or "qwen" in raw_vision or "/" in raw_vision:
+            self.vision_model = FALLBACK_VISION_MODEL
+        else:
+            self.vision_model = raw_vision
 
     # ==================================================
     # TEXT / RAG GENERATION
@@ -38,35 +48,32 @@ class GroqService:
         max_tokens: int = 4096,
     ) -> str:
 
-        response = (
-            self.client.chat.completions.create(
+        try:
+            response = self.client.chat.completions.create(
                 model=self.llm_model,
                 messages=[
-                    {
-                        "role": "system",
-                        "content": system_prompt,
-                    },
-                    {
-                        "role": "user",
-                        "content": user_prompt,
-                    },
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
                 ],
                 temperature=temperature,
                 max_completion_tokens=max_tokens,
                 stream=False,
             )
-        )
+        except Exception as err:
+            print(f"Groq generate_text failed with {self.llm_model}: {err}. Retrying with {FALLBACK_LLM_MODEL}")
+            response = self.client.chat.completions.create(
+                model=FALLBACK_LLM_MODEL,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                temperature=temperature,
+                max_completion_tokens=max_tokens,
+                stream=False,
+            )
 
-        content = (
-            response.choices[0]
-            .message.content
-        )
-
-        return (
-            content.strip()
-            if isinstance(content, str)
-            else ""
-        )
+        content = response.choices[0].message.content
+        return content.strip() if isinstance(content, str) else ""
 
     # ==================================================
     # TEXT STREAMING
@@ -80,35 +87,35 @@ class GroqService:
         max_tokens: int = 4096,
     ):
 
-        stream = (
-            self.client.chat.completions.create(
-                model=self.llm_model,
+        model_to_use = self.llm_model
+        try:
+            stream = self.client.chat.completions.create(
+                model=model_to_use,
                 messages=[
-                    {
-                        "role": "system",
-                        "content": system_prompt,
-                    },
-                    {
-                        "role": "user",
-                        "content": user_prompt,
-                    },
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
                 ],
                 temperature=temperature,
                 max_completion_tokens=max_tokens,
                 stream=True,
             )
-        )
-
-        for chunk in stream:
-
-            if not chunk.choices:
-                continue
-
-            content = (
-                chunk.choices[0]
-                .delta.content
+        except Exception as err:
+            print(f"Groq stream_text failed with {model_to_use}: {err}. Retrying with {FALLBACK_LLM_MODEL}")
+            stream = self.client.chat.completions.create(
+                model=FALLBACK_VISION_MODEL,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                temperature=temperature,
+                max_completion_tokens=max_tokens,
+                stream=True,
             )
 
+        for chunk in stream:
+            if not chunk.choices:
+                continue
+            content = chunk.choices[0].delta.content
             if content:
                 yield content
 
@@ -126,55 +133,46 @@ class GroqService:
     ) -> str:
 
         if not image_bytes:
-            raise ValueError(
-                "image_bytes cannot be empty."
-            )
+            raise ValueError("image_bytes cannot be empty.")
 
-        encoded = base64.b64encode(
-            image_bytes
-        ).decode("utf-8")
+        encoded = base64.b64encode(image_bytes).decode("utf-8")
+        data_url = f"data:{mime_type};base64,{encoded}"
 
-        data_url = (
-            f"data:{mime_type};base64,"
-            f"{encoded}"
-        )
-
-        response = (
-            self.client.chat.completions.create(
-                model=self.vision_model,
-                messages=[
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
                     {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "text",
-                                "text": prompt,
-                            },
-                            {
-                                "type": "image_url",
-                                "image_url": {
-                                    "url": data_url,
-                                },
-                            },
-                        ],
-                    }
+                        "type": "image_url",
+                        "image_url": {"url": data_url},
+                    },
                 ],
+            }
+        ]
+
+        model_to_use = self.vision_model
+
+        try:
+            response = self.client.chat.completions.create(
+                model=model_to_use,
+                messages=messages,
                 temperature=temperature,
                 max_completion_tokens=max_tokens,
                 stream=False,
             )
-        )
+        except Exception as err:
+            print(f"Groq vision OCR failed with {model_to_use}: {err}. Retrying with {FALLBACK_VISION_MODEL}")
+            response = self.client.chat.completions.create(
+                model=FALLBACK_VISION_MODEL,
+                messages=messages,
+                temperature=temperature,
+                max_completion_tokens=max_tokens,
+                stream=False,
+            )
 
-        content = (
-            response.choices[0]
-            .message.content
-        )
-
-        return (
-            content.strip()
-            if isinstance(content, str)
-            else ""
-        )
+        content = response.choices[0].message.content
+        return content.strip() if isinstance(content, str) else ""
 
     # ==================================================
     # OCR
