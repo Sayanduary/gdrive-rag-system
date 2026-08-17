@@ -15,10 +15,6 @@ const api = axios.create({
   },
 });
 
-// ==================================================
-// REQUEST INTERCEPTOR
-// ==================================================
-
 api.interceptors.request.use(
   (config) => {
     console.log("API REQUEST:", {
@@ -29,14 +25,8 @@ api.interceptors.request.use(
     return config;
   },
 
-  (error) => {
-    return Promise.reject(error);
-  },
+  (error) => Promise.reject(error),
 );
-
-// ==================================================
-// RESPONSE INTERCEPTOR
-// ==================================================
 
 api.interceptors.response.use(
   (response) => {
@@ -50,8 +40,7 @@ api.interceptors.response.use(
       data: response.data,
     });
 
-    // IMPORTANT:
-    // Return the complete Axios response.
+    // DO NOT change this to response.data
     return response;
   },
 

@@ -9,27 +9,12 @@ import Analyze from "./pages/Analyze";
 import Chat from "./pages/Chat";
 
 // ==================================================
-// STORAGE HELPERS
+// STORAGE KEYS
 // ==================================================
 
-const LEGACY_STORAGE_KEY = "gdrive_rag_session";
+const STORAGE_KEY = "gdrive_rag_session";
 
-function getActiveChatKey(user) {
-  const userId = user?.sub || user?.email || "anonymous";
-
-  return `gdrive_rag_active_conversation_${userId}`;
-}
-
-function clearUserStorage(user) {
-  localStorage.removeItem(LEGACY_STORAGE_KEY);
-
-  if (user) {
-    localStorage.removeItem(getActiveChatKey(user));
-  }
-
-  // Remove old global key too.
-  localStorage.removeItem("gdrive_rag_active_conversation");
-}
+const ACTIVE_CHAT_KEY = "gdrive_rag_active_conversation";
 
 // ==================================================
 // LOADING SCREEN
@@ -39,7 +24,17 @@ function LoadingScreen() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-[#0d0d0d] text-white">
       <div className="flex flex-col items-center gap-4">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/10 border-t-white" />
+        <div
+          className="
+            h-8
+            w-8
+            animate-spin
+            rounded-full
+            border-2
+            border-white/10
+            border-t-white
+          "
+        />
 
         <p className="text-sm text-neutral-500">Checking authentication...</p>
       </div>
@@ -91,6 +86,10 @@ function App() {
           return;
         }
 
+        // ============================================
+        // DEBUG
+        // ============================================
+
         console.log("AUTH RESPONSE:", response.data);
 
         console.log("CURRENT AUTH USER:", response.data?.user);
@@ -101,6 +100,7 @@ function App() {
 
         if (!response.data?.authenticated) {
           setUser(null);
+
           setAnalysis(null);
 
           localStorage.removeItem(STORAGE_KEY);
@@ -116,7 +116,17 @@ function App() {
 
         const authenticatedUser = response.data?.user || null;
 
+        console.log("SETTING USER:", authenticatedUser);
+
         setUser(authenticatedUser);
+
+        // IMPORTANT:
+        // Do NOT restore an old user's
+        // analysis from localStorage.
+        //
+        // Dashboard data comes from
+        // PostgreSQL using the authenticated
+        // user's Google sub.
 
         setAnalysis(null);
       } catch (error) {
@@ -124,6 +134,7 @@ function App() {
           console.error("Authentication check failed:", error);
 
           setUser(null);
+
           setAnalysis(null);
 
           localStorage.removeItem(STORAGE_KEY);
@@ -143,6 +154,7 @@ function App() {
       ignore = true;
     };
   }, []);
+
   // ==================================================
   // ANALYSIS COMPLETE
   // ==================================================
@@ -152,10 +164,12 @@ function App() {
 
     if (newAnalysis && folderUrl) {
       localStorage.setItem(
-        LEGACY_STORAGE_KEY,
+        STORAGE_KEY,
         JSON.stringify({
           folderUrl,
           analysis: newAnalysis,
+
+          // Store the owner too.
           userId: user?.sub || null,
         }),
       );
@@ -163,17 +177,13 @@ function App() {
   }
 
   // ==================================================
-  // CLEAR SESSION
+  // CLEAR LOCAL SESSION
   // ==================================================
 
   function clearSession() {
-    localStorage.removeItem(LEGACY_STORAGE_KEY);
+    localStorage.removeItem(STORAGE_KEY);
 
-    if (user) {
-      localStorage.removeItem(getActiveChatKey(user));
-    }
-
-    localStorage.removeItem("gdrive_rag_active_conversation");
+    localStorage.removeItem(ACTIVE_CHAT_KEY);
 
     setAnalysis(null);
   }
@@ -184,6 +194,8 @@ function App() {
 
   function handleSyncAnotherFolder() {
     clearSession();
+
+    window.location.href = "/analyze";
   }
 
   // ==================================================
@@ -191,16 +203,32 @@ function App() {
   // ==================================================
 
   async function handleLogout() {
+    console.log("LOGOUT STARTED");
+
     try {
-      await api.post("/api/auth/logout");
+      const response = await api.post("/api/auth/logout");
+
+      console.log("LOGOUT RESPONSE:", response.data);
     } catch (error) {
-      console.error("Logout failed:", error);
+      console.error("Logout request failed:", error);
     } finally {
-      clearUserStorage(user);
+      // ==========================================
+      // ALWAYS CLEAR FRONTEND STATE
+      // ==========================================
+
+      setUser(null);
 
       setAnalysis(null);
 
-      setUser(null);
+      localStorage.removeItem(STORAGE_KEY);
+
+      localStorage.removeItem(ACTIVE_CHAT_KEY);
+
+      // ==========================================
+      // GO TO LOGIN
+      // ==========================================
+
+      window.location.href = "/login";
     }
   }
 
@@ -221,7 +249,7 @@ function App() {
   }
 
   // ==================================================
-  // USER-SPECIFIC COMPONENT KEY
+  // USER KEY
   // ==================================================
 
   const userKey = user?.sub || user?.email || "anonymous";
