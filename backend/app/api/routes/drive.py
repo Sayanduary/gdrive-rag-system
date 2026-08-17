@@ -17,6 +17,10 @@ router = APIRouter(
 )
 
 
+# ==================================================
+# REQUEST MODEL
+# ==================================================
+
 class DriveAnalyzeRequest(BaseModel):
     folder_url: str
 
@@ -27,9 +31,7 @@ class DriveAnalyzeRequest(BaseModel):
 
 vector_store = VectorStore()
 
-folder_service = (
-    AnalyzedFolderService()
-)
+folder_service = AnalyzedFolderService()
 
 
 # ==================================================
@@ -39,50 +41,94 @@ folder_service = (
 def extract_folder_id(
     folder_url: str,
 ) -> str:
+    """
+    Extract a Google Drive folder ID from:
 
-    folder_url = (
-        folder_url.strip()
-    )
+    https://drive.google.com/drive/folders/FOLDER_ID
 
-    patterns = [
-        r"/folders/([a-zA-Z0-9_-]+)",
-        r"[?&]id=([a-zA-Z0-9_-]+)",
-    ]
+    https://drive.google.com/drive/u/1/folders/FOLDER_ID
 
-    for pattern in patterns:
+    https://drive.google.com/drive/u/0/folders/FOLDER_ID
 
-        match = re.search(
-            pattern,
-            folder_url,
+    https://drive.google.com/open?id=FOLDER_ID
+
+    FOLDER_ID
+    """
+
+    if not isinstance(folder_url, str):
+        raise ValueError(
+            "Google Drive folder URL must be a string."
         )
 
-        if match:
-            return match.group(1)
+    value = folder_url.strip()
 
-    # ----------------------------------------------
-    # User pasted folder ID directly
-    # ----------------------------------------------
+    if not value:
+        raise ValueError(
+            "Google Drive folder URL cannot be empty."
+        )
+
+    # ==================================================
+    # STANDARD /u/X/folders/ URL
+    # ==================================================
+
+    match = re.search(
+        r"/folders/([a-zA-Z0-9_-]+)",
+        value,
+    )
+
+    if match:
+
+        folder_id = match.group(1).strip()
+
+        if folder_id:
+            return folder_id
+
+    # ==================================================
+    # ?id=FOLDER_ID
+    # ==================================================
+
+    match = re.search(
+        r"[?&]id=([a-zA-Z0-9_-]+)",
+        value,
+    )
+
+    if match:
+
+        folder_id = match.group(1).strip()
+
+        if folder_id:
+            return folder_id
+
+    # ==================================================
+    # RAW FOLDER ID
+    # ==================================================
 
     if re.fullmatch(
         r"[a-zA-Z0-9_-]+",
-        folder_url,
+        value,
     ):
-        return folder_url
+
+        return value
 
     raise ValueError(
         "Invalid Google Drive folder URL. "
-        "Expected a Google Drive folder link."
+        "Expected a Google Drive folder link "
+        "or folder ID."
     )
 
 
 # ==================================================
-# GET GOOGLE FOLDER METADATA
+# GOOGLE FOLDER METADATA
 # ==================================================
 
 def get_folder_metadata(
     drive_service,
     folder_id: str,
 ):
+    """
+    Verify that the authenticated Google account
+    can access the requested Drive folder.
+    """
 
     try:
 
@@ -101,23 +147,86 @@ def get_folder_metadata(
             .execute()
         )
 
+        # ------------------------------------------
+        # Make sure the returned object is actually
+        # a folder.
+        # ------------------------------------------
+
+        mime_type = response.get(
+            "mimeType"
+        )
+
+        if mime_type != (
+            "application/vnd.google-apps.folder"
+        ):
+
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "The provided Google Drive ID "
+                    "is not a folder."
+                ),
+            )
+
         return response
+
+    except HTTPException:
+
+        raise
 
     except Exception as error:
 
+        print()
+        print("=" * 70)
+        print("GOOGLE DRIVE FOLDER ACCESS FAILED")
+        print("=" * 70)
+
         print(
-            "Unable to fetch folder metadata:",
-            error,
+            f"Folder ID: {folder_id}"
         )
 
-        return {
-            "id": folder_id,
-            "name": "Google Drive Folder",
-            "webViewLink": None,
-            "mimeType": (
-                "application/vnd.google-apps.folder"
+        print(
+            f"Error type: "
+            f"{type(error).__name__}"
+        )
+
+        print(
+            f"Error: {error}"
+        )
+
+        print("=" * 70)
+
+        # ------------------------------------------
+        # Google Drive commonly returns 404 when:
+        #
+        # - folder doesn't exist
+        # - folder isn't shared with this account
+        # - authenticated account cannot access it
+        # ------------------------------------------
+
+        error_message = str(error)
+
+        if (
+            "404" in error_message
+            or "File not found" in error_message
+            or "notFound" in error_message
+        ):
+
+            raise HTTPException(
+                status_code=404,
+                detail=(
+                    "Google Drive folder was not found "
+                    "or the authenticated Google account "
+                    "does not have access to it."
+                ),
+            )
+
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Unable to access the Google Drive folder."
             ),
-        }
+        )
 
 
 # ==================================================
@@ -141,15 +250,13 @@ def register_analyzed_folder(
     persistent dashboard registry.
     """
 
-    # ----------------------------------------------
-    # Folder metadata
-    # ----------------------------------------------
+    # ==================================================
+    # FOLDER METADATA
+    # ==================================================
 
-    folder_metadata = (
-        get_folder_metadata(
-            drive_service,
-            folder_id,
-        )
+    folder_metadata = get_folder_metadata(
+        drive_service,
+        folder_id,
     )
 
     folder_name = (
@@ -158,15 +265,13 @@ def register_analyzed_folder(
     )
 
     canonical_folder_url = (
-        folder_metadata.get(
-            "webViewLink"
-        )
+        folder_metadata.get("webViewLink")
         or folder_url
     )
 
-    # ----------------------------------------------
-    # Read current indexed files from VectorStore
-    # ----------------------------------------------
+    # ==================================================
+    # READ CURRENT INDEXED FILES
+    # ==================================================
 
     indexed_files = (
         vector_store.get_indexed_files(
@@ -200,12 +305,9 @@ def register_analyzed_folder(
         f"Indexed files: {len(indexed_files)}"
     )
 
-    # ----------------------------------------------
-    # Remove registry entries for files that are no
-    # longer present in document_chunks.
-    #
-    # This handles Drive deletions.
-    # ----------------------------------------------
+    # ==================================================
+    # REMOVE STALE REGISTRY FILES
+    # ==================================================
 
     existing_files = (
         folder_service.get_folder_files(
@@ -220,10 +322,7 @@ def register_analyzed_folder(
             existing_file["file_id"]
         )
 
-        if (
-            existing_file_id
-            not in current_file_ids
-        ):
+        if existing_file_id not in current_file_ids:
 
             print(
                 "Removing stale registry file:",
@@ -247,9 +346,9 @@ def register_analyzed_folder(
                     f"{error}"
                 )
 
-    # ----------------------------------------------
-    # Register every currently indexed file
-    # ----------------------------------------------
+    # ==================================================
+    # REGISTER CURRENT FILES
+    # ==================================================
 
     total_chunks = 0
 
@@ -260,28 +359,20 @@ def register_analyzed_folder(
     ):
 
         file_name = (
-            metadata.get(
-                "file_name"
-            )
+            metadata.get("file_name")
             or "Unknown file"
         )
 
-        file_path = (
-            metadata.get(
-                "path"
-            )
+        file_path = metadata.get(
+            "path"
         )
 
-        mime_type = (
-            metadata.get(
-                "mime_type"
-            )
+        mime_type = metadata.get(
+            "mime_type"
         )
 
-        modified_time = (
-            metadata.get(
-                "modified_time"
-            )
+        modified_time = metadata.get(
+            "modified_time"
         )
 
         try:
@@ -305,9 +396,7 @@ def register_analyzed_folder(
                 chunk_count=chunk_count,
             )
 
-            total_chunks += (
-                chunk_count
-            )
+            total_chunks += chunk_count
 
             registered_files += 1
 
@@ -325,9 +414,9 @@ def register_analyzed_folder(
                 f"{error}"
             )
 
-    # ----------------------------------------------
-    # Register folder summary
-    # ----------------------------------------------
+    # ==================================================
+    # REGISTER FOLDER SUMMARY
+    # ==================================================
 
     folder_service.upsert_folder(
         user_id=user_id,
@@ -373,26 +462,6 @@ def analyze_drive(
 ):
 
     # ==================================================
-    # GOOGLE AUTHENTICATION
-    # ==================================================
-
-    credentials_data = (
-        request.session.get(
-            "google_credentials"
-        )
-    )
-
-    if not credentials_data:
-
-        raise HTTPException(
-            status_code=401,
-            detail=(
-                "User is not authenticated "
-                "with Google."
-            ),
-        )
-
-    # ==================================================
     # GOOGLE USER
     # ==================================================
 
@@ -405,7 +474,7 @@ def analyze_drive(
         raise HTTPException(
             status_code=401,
             detail=(
-                "Google user information is missing."
+                "User is not authenticated."
             ),
         )
 
@@ -423,15 +492,55 @@ def analyze_drive(
         )
 
     # ==================================================
+    # GOOGLE CREDENTIALS
+    # ==================================================
+
+    credentials_data = (
+        request.session.get(
+            "google_credentials"
+        )
+    )
+
+    print()
+    print("=" * 70)
+    print("DRIVE AUTHENTICATION CHECK")
+    print("=" * 70)
+
+    print(
+        f"User ID: {user_id}"
+    )
+
+    print(
+        f"User email: "
+        f"{user.get('email')}"
+    )
+
+    print(
+        "Google credentials exist:",
+        bool(credentials_data),
+    )
+
+    print("=" * 70)
+
+    if not credentials_data:
+
+        raise HTTPException(
+            status_code=401,
+            detail=(
+                "Google Drive authorization is "
+                "missing or expired. "
+                "Please sign in with Google again."
+            ),
+        )
+
+    # ==================================================
     # EXTRACT FOLDER ID
     # ==================================================
 
     try:
 
-        folder_id = (
-            extract_folder_id(
-                payload.folder_url
-            )
+        folder_id = extract_folder_id(
+            payload.folder_url
         )
 
     except ValueError as error:
@@ -440,6 +549,27 @@ def analyze_drive(
             status_code=400,
             detail=str(error),
         )
+
+    # ==================================================
+    # FOLDER PARSING DEBUG
+    # ==================================================
+
+    print()
+    print("=" * 70)
+    print("DRIVE FOLDER PARSING")
+    print("=" * 70)
+
+    print(
+        f"Original URL: "
+        f"{payload.folder_url}"
+    )
+
+    print(
+        f"Extracted folder ID: "
+        f"{folder_id}"
+    )
+
+    print("=" * 70)
 
     # ==================================================
     # ANALYZE / INGEST
@@ -465,84 +595,102 @@ def analyze_drive(
             f"{payload.folder_url}"
         )
 
-        # ----------------------------------------------
-        # Create Google Drive service
-        # ----------------------------------------------
+        # ==================================================
+        # CREATE GOOGLE DRIVE SERVICE
+        # ==================================================
 
-        drive_service = (
-            get_drive_service(
-                credentials_data
-            )
+        drive_service = get_drive_service(
+            credentials_data
         )
 
-        # ----------------------------------------------
-        # Create ingestion service
-        # ----------------------------------------------
+        # ==================================================
+        # VERIFY FOLDER ACCESS BEFORE INGESTION
+        # ==================================================
+
+        folder_metadata = get_folder_metadata(
+            drive_service,
+            folder_id,
+        )
+
+        print()
+        print(
+            "GOOGLE DRIVE FOLDER ACCESS OK"
+        )
+
+        print(
+            f"Drive folder name: "
+            f"{folder_metadata.get('name')}"
+        )
+
+        print(
+            f"Drive folder ID: "
+            f"{folder_metadata.get('id')}"
+        )
+
+        # ==================================================
+        # CREATE INGESTION SERVICE
+        # ==================================================
 
         ingestion = IngestionService(
             drive_service=drive_service,
             user_id=user_id,
         )
 
-        # ----------------------------------------------
-        # Analyze folder
-        # ----------------------------------------------
+        # ==================================================
+        # ANALYZE FOLDER
+        # ==================================================
 
-        result = (
-            ingestion.ingest_folder(
-                folder_id
-            )
+        result = ingestion.ingest_folder(
+            folder_id
         )
 
-        # ----------------------------------------------
-        # Register analyzed folder/files
-        #
-        # document_chunks has already been updated
-        # by the ingestion process at this point.
-        # ----------------------------------------------
+        # ==================================================
+        # REGISTER ANALYZED FOLDER / FILES
+        # ==================================================
 
         registry_result = (
             register_analyzed_folder(
                 user_id=user_id,
                 folder_id=folder_id,
-                folder_url=(
-                    payload.folder_url
-                ),
+                folder_url=payload.folder_url,
                 drive_service=drive_service,
             )
         )
 
-        # ----------------------------------------------
-        # Store active folder in session
-        # ----------------------------------------------
+        # ==================================================
+        # STORE ACTIVE FOLDER
+        # ==================================================
 
         request.session[
             "active_folder_id"
         ] = folder_id
 
-        # ----------------------------------------------
-        # Final response
-        # ----------------------------------------------
+        # ==================================================
+        # FINAL RESPONSE
+        # ==================================================
 
         response = {
             "success": True,
 
             "folder_id": folder_id,
 
-            "folder_name":
+            "folder_name": (
                 registry_result[
                     "folder_name"
-                ],
+                ]
+            ),
 
-            "file_count":
+            "file_count": (
                 registry_result[
                     "file_count"
-                ],
+                ]
+            ),
 
-            "chunk_count":
+            "chunk_count": (
                 registry_result[
                     "chunk_count"
-                ],
+                ]
+            ),
 
             **result,
         }
@@ -571,8 +719,17 @@ def analyze_drive(
 
         return response
 
+    # ==================================================
+    # FASTAPI ERROR
+    # ==================================================
+
     except HTTPException:
+
         raise
+
+    # ==================================================
+    # GENERAL ERROR
+    # ==================================================
 
     except Exception as error:
 
@@ -582,8 +739,12 @@ def analyze_drive(
         print("=" * 70)
 
         print(
-            f"{type(error).__name__}: "
-            f"{error}"
+            f"Error type: "
+            f"{type(error).__name__}"
+        )
+
+        print(
+            f"Error: {error}"
         )
 
         print("=" * 70)
