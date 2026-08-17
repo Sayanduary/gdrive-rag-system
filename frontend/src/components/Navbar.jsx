@@ -315,6 +315,7 @@ function Navbar({
                 <img
                   src={avatar}
                   alt={displayName}
+                  referrerPolicy="no-referrer"
                   className="h-full w-full object-cover"
                 />
               ) : (

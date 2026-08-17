@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Request, HTTPException
+from fastapi import APIRouter, Request, HTTPException, Response
 from fastapi.responses import RedirectResponse
 from google_auth_oauthlib.flow import Flow
 
@@ -484,7 +484,15 @@ def google_callback(
 @router.get("/me")
 def get_current_user(
     request: Request,
+    response: Response,
 ):
+
+    # Prevent browser / CDN from caching auth state.
+    response.headers["Cache-Control"] = (
+        "no-store, no-cache, must-revalidate, private"
+    )
+
+    response.headers["Pragma"] = "no-cache"
 
     user = (
         request.session.get(

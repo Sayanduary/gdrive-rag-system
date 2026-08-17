@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_SECRET: str = ""
 
     GOOGLE_REDIRECT_URI: str = (
-        "https://gdrive-rag-system-h5sf.onrender.com/api/auth/google/callback"
+        "https://gdrive-rag-system.vercel.app/api/auth/google/callback"
     )
 
     FRONTEND_URL: str = (

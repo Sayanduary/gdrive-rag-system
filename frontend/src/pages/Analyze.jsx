@@ -7,7 +7,7 @@ import Navbar from "../components/Navbar";
 
 const STORAGE_KEY = "gdrive_rag_session";
 
-function Analyze({ user, onAnalysisComplete }) {
+function Analyze({ user, onAnalysisComplete, onLogout }) {
   const navigate = useNavigate();
   const [folderUrl, setFolderUrl] = useState("");
   const [analyzing, setAnalyzing] = useState(false);
