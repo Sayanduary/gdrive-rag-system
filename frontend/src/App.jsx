@@ -85,43 +85,39 @@ function App() {
       try {
         setCheckingAuth(true);
 
-        const response = await api.get("/api/auth/me", {
-          // Always ask the browser for the
-          // current session-backed response.
-          params: {
-            _: Date.now(),
-          },
-        });
+        const response = await api.get(`/api/auth/me?_=${Date.now()}`);
 
         if (ignore) {
           return;
         }
 
+        console.log("AUTH RESPONSE:", response.data);
+
         console.log("CURRENT AUTH USER:", response.data?.user);
 
-        // ==========================================
+        // ============================================
         // NOT AUTHENTICATED
-        // ==========================================
+        // ============================================
 
         if (!response.data?.authenticated) {
           setUser(null);
           setAnalysis(null);
 
-          clearUserStorage(user);
+          localStorage.removeItem(STORAGE_KEY);
+
+          localStorage.removeItem(ACTIVE_CHAT_KEY);
 
           return;
         }
 
-        // ==========================================
+        // ============================================
         // AUTHENTICATED
-        // ==========================================
+        // ============================================
 
         const authenticatedUser = response.data?.user || null;
 
         setUser(authenticatedUser);
 
-        // Do not restore old analysis state
-        // across users.
         setAnalysis(null);
       } catch (error) {
         if (!ignore) {
@@ -130,7 +126,9 @@ function App() {
           setUser(null);
           setAnalysis(null);
 
-          clearUserStorage(user);
+          localStorage.removeItem(STORAGE_KEY);
+
+          localStorage.removeItem(ACTIVE_CHAT_KEY);
         }
       } finally {
         if (!ignore) {
@@ -145,7 +143,6 @@ function App() {
       ignore = true;
     };
   }, []);
-
   // ==================================================
   // ANALYSIS COMPLETE
   // ==================================================
