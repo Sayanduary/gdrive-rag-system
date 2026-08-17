@@ -18,6 +18,7 @@ const ACTIVE_CHAT_KEY = "gdrive_rag_active_conversation";
 
 function Chat({ user, onSyncAnotherFolder }) {
   const navigate = useNavigate();
+
   // ==================================================
   // CHAT STATE
   // ==================================================
@@ -69,8 +70,6 @@ function Chat({ user, onSyncAnotherFolder }) {
     });
   }, [messages, loading]);
 
-
-
   // ==================================================
   // INITIAL LOAD
   // ==================================================
@@ -84,9 +83,13 @@ function Chat({ user, onSyncAnotherFolder }) {
         setError("");
 
         const response = await api.get("/api/conversations");
-        if (ignore) return;
+
+        if (ignore) {
+          return;
+        }
 
         const items = response.data.conversations || [];
+
         setConversations(items);
 
         if (items.length === 0) {
@@ -97,11 +100,13 @@ function Chat({ user, onSyncAnotherFolder }) {
         }
 
         const savedId = localStorage.getItem(ACTIVE_CHAT_KEY);
+
         const savedConversation = items.find(
           (item) => String(item.id) === savedId,
         );
 
         const conversationToOpen = savedConversation || items[0];
+
         await loadConversation(conversationToOpen.id);
       } catch (error) {
         if (!ignore) {
@@ -399,12 +404,11 @@ function Chat({ user, onSyncAnotherFolder }) {
         ),
       );
 
-      // Persist title in backend.
       updateChatTitle(activeConversationId, generatedTitle);
     }
 
     // ----------------------------------------------
-    // Add user message
+    // Add user + assistant placeholder
     // ----------------------------------------------
 
     setMessages((previous) => [
@@ -423,19 +427,34 @@ function Chat({ user, onSyncAnotherFolder }) {
       },
     ]);
 
-    // Clear composer.
+    // ----------------------------------------------
+    // Clear composer
+    // ----------------------------------------------
+
     setQuestion("");
 
     try {
-      const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL || "http://localhost:8000").replace(/\/$/, "");
-      const response = await fetch(`${apiBaseUrl}/api/query/stream`, {
+      // IMPORTANT:
+      // Always use the Vercel same-origin API.
+      // Do NOT use VITE_API_BASE_URL here.
+      //
+      // Vercel:
+      // /api/query/stream
+      //
+      // rewrites to Render:
+      // /api/query/stream
+      //
+      // This keeps the browser on the Vercel
+      // origin so the session cookie is included.
 
+      const response = await fetch("/api/query/stream", {
         method: "POST",
 
         credentials: "include",
 
         headers: {
           "Content-Type": "application/json",
+          Accept: "text/event-stream",
         },
 
         body: JSON.stringify({
@@ -444,6 +463,10 @@ function Chat({ user, onSyncAnotherFolder }) {
           conversation_id: activeConversationId,
         }),
       });
+
+      // ------------------------------------------
+      // HTTP ERROR
+      // ------------------------------------------
 
       if (!response.ok) {
         let detail = "Failed to generate an answer.";
@@ -459,6 +482,10 @@ function Chat({ user, onSyncAnotherFolder }) {
         throw new Error(detail);
       }
 
+      // ------------------------------------------
+      // STREAMING BODY
+      // ------------------------------------------
+
       if (!response.body) {
         throw new Error("Streaming response is unavailable.");
       }
@@ -468,6 +495,10 @@ function Chat({ user, onSyncAnotherFolder }) {
       const decoder = new TextDecoder();
 
       let buffer = "";
+
+      // ------------------------------------------
+      // READ STREAM
+      // ------------------------------------------
 
       while (true) {
         const { value, done } = await reader.read();
@@ -505,8 +536,10 @@ function Chat({ user, onSyncAnotherFolder }) {
 
               localStorage.setItem(ACTIVE_CHAT_KEY, String(conversationId));
 
-              // If backend created the conversation
-              // during the request, update title there.
+              // If backend created the
+              // conversation during request,
+              // update title there.
+
               if (isFirstMessage && conversationId) {
                 setConversations((previous) =>
                   previous.map((conversation) =>
@@ -566,7 +599,9 @@ function Chat({ user, onSyncAnotherFolder }) {
           // ==========================================
 
           if (eventName === "error") {
-            throw new Error(data.message || "Generation failed.");
+            throw new Error(
+              data.message || data.content || "Generation failed.",
+            );
           }
 
           // ==========================================
@@ -587,7 +622,6 @@ function Chat({ user, onSyncAnotherFolder }) {
 
               updated[lastIndex] = {
                 ...updated[lastIndex],
-
                 sources: finalSources,
               };
 
@@ -601,7 +635,9 @@ function Chat({ user, onSyncAnotherFolder }) {
         }
       }
     } catch (error) {
-      // Remove optimistic user + assistant messages.
+      // Remove optimistic user +
+      // assistant messages.
+
       setMessages((previous) => previous.slice(0, -2));
 
       pendingSourcesRef.current = [];
@@ -621,10 +657,13 @@ function Chat({ user, onSyncAnotherFolder }) {
   function handleKeyDown(event) {
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
-
       askQuestion();
     }
   }
+
+  // ==================================================
+  // SYNC ANOTHER FOLDER
+  // ==================================================
 
   function handleSyncAnotherFolder() {
     if (typeof onSyncAnotherFolder === "function") {
@@ -632,6 +671,7 @@ function Chat({ user, onSyncAnotherFolder }) {
     } else {
       localStorage.removeItem("gdrive_rag_session");
     }
+
     navigate("/analyze");
   }
 
@@ -686,6 +726,7 @@ function Chat({ user, onSyncAnotherFolder }) {
 
         <aside className="hidden w-72 shrink-0 border-r border-white/[0.06] bg-[#101010]/80 backdrop-blur-xl lg:flex lg:flex-col">
           {/* Header */}
+
           <div className="flex items-center justify-between border-b border-white/[0.06] p-4">
             <p className="text-sm font-medium text-neutral-300">
               Conversations
@@ -718,6 +759,7 @@ function Chat({ user, onSyncAnotherFolder }) {
           </div>
 
           {/* Conversation List */}
+
           <div className="flex-1 overflow-y-auto p-3">
             {loadingConversations ? (
               <div className="px-2 py-4 text-xs text-neutral-600">
@@ -752,6 +794,7 @@ function Chat({ user, onSyncAnotherFolder }) {
                         `}
                     >
                       {/* Conversation */}
+
                       <button
                         onClick={() => loadConversation(conversation.id)}
                         disabled={loading}
@@ -774,6 +817,7 @@ function Chat({ user, onSyncAnotherFolder }) {
                       </button>
 
                       {/* Rename */}
+
                       <button
                         onClick={() => renameConversation(conversation)}
                         disabled={loading}
@@ -797,6 +841,7 @@ function Chat({ user, onSyncAnotherFolder }) {
                       </button>
 
                       {/* Delete */}
+
                       <button
                         onClick={() => deleteConversation(conversation.id)}
                         disabled={loading}
@@ -827,6 +872,7 @@ function Chat({ user, onSyncAnotherFolder }) {
           </div>
 
           {/* New Conversation */}
+
           <div className="border-t border-white/[0.06] p-3">
             <button
               onClick={createNewChat}
@@ -862,9 +908,7 @@ function Chat({ user, onSyncAnotherFolder }) {
         ================================================== */}
 
         <main className="relative min-w-0 flex-1">
-          {/* ==================================================
-              MESSAGE SCROLL
-          ================================================== */}
+          {/* Message Scroll */}
 
           <div
             ref={messagesContainerRef}
@@ -879,9 +923,7 @@ function Chat({ user, onSyncAnotherFolder }) {
             "
           >
             <div className="mx-auto w-full max-w-3xl">
-              {/* ==================================================
-                  EMPTY STATE
-              ================================================== */}
+              {/* Empty State */}
 
               {messages.length === 0 && !loading && !error ? (
                 <div className="flex min-h-[calc(100vh-260px)] items-center justify-center">
@@ -954,9 +996,7 @@ function Chat({ user, onSyncAnotherFolder }) {
                 </div>
               ) : (
                 <div className="space-y-8">
-                  {/* ==================================================
-                      MESSAGES
-                  ================================================== */}
+                  {/* Messages */}
 
                   {messages.map((message, index) => {
                     const isLastMessage = index === messages.length - 1;
@@ -974,6 +1014,7 @@ function Chat({ user, onSyncAnotherFolder }) {
                         }
                       >
                         {/* USER */}
+
                         {message.role === "user" ? (
                           <div className="flex w-full justify-end">
                             <div className="flex max-w-[85%] items-start gap-3 sm:max-w-[75%]">
@@ -990,6 +1031,7 @@ function Chat({ user, onSyncAnotherFolder }) {
                           </div>
                         ) : (
                           /* ASSISTANT */
+
                           <div className="w-full">
                             <div className="flex items-start gap-3 sm:gap-4">
                               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.04]">
@@ -1022,6 +1064,7 @@ function Chat({ user, onSyncAnotherFolder }) {
                                 ) : null}
 
                                 {/* Sources */}
+
                                 {!isGenerating &&
                                   message.sources?.length > 0 && (
                                     <div className="mt-6">
@@ -1080,6 +1123,7 @@ function Chat({ user, onSyncAnotherFolder }) {
               )}
 
               {/* Error */}
+
               {error && (
                 <div className="mt-8 rounded-xl border border-red-500/10 bg-red-500/[0.04] px-4 py-3 text-xs text-red-400">
                   {error}
