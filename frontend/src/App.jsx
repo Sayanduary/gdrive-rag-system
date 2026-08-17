@@ -86,13 +86,7 @@ function App() {
           return;
         }
 
-        // ============================================
-        // DEBUG
-        // ============================================
 
-        console.log("AUTH RESPONSE:", response.data);
-
-        console.log("CURRENT AUTH USER:", response.data?.user);
 
         // ============================================
         // NOT AUTHENTICATED
@@ -116,7 +110,7 @@ function App() {
 
         const authenticatedUser = response.data?.user || null;
 
-        console.log("SETTING USER:", authenticatedUser);
+
 
         setUser(authenticatedUser);
 

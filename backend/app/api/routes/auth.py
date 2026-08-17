@@ -412,38 +412,7 @@ def google_callback(
         None,
     )
 
-    # ==================================================
-    # DEBUG
-    # ==================================================
-
-    print()
-    print("=" * 70)
-    print("AUTHENTICATED USER")
-    print("=" * 70)
-
-    print(
-        "SUB:",
-        google_user["sub"],
-    )
-
-    print(
-        "EMAIL:",
-        google_user["email"],
-    )
-
-    print(
-        "NAME:",
-        google_user["name"],
-    )
-
-    print("=" * 70)
-
-    print(
-        "SESSION USER:",
-        request.session.get(
-            "google_user"
-        ),
-    )
+ 
 
     # ==================================================
     # FRONTEND REDIRECT
@@ -455,7 +424,7 @@ def google_callback(
     )
 
     print(
-        "REDIRECTING TO:",
+        "REDIRECTING TO:"
         frontend_url,
     )
 
