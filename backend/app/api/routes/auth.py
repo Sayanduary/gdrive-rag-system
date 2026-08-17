@@ -1,6 +1,8 @@
 from fastapi import APIRouter, Request, HTTPException, Response
 from fastapi.responses import RedirectResponse
+
 from google_auth_oauthlib.flow import Flow
+from googleapiclient.discovery import build
 
 from config import settings
 
@@ -10,6 +12,10 @@ router = APIRouter(
     tags=["Authentication"],
 )
 
+
+# ==================================================
+# GOOGLE SCOPES
+# ==================================================
 
 GOOGLE_SCOPES = [
     "openid",
@@ -28,17 +34,18 @@ def create_google_flow():
     return Flow.from_client_config(
         {
             "web": {
-                "client_id":
-                    settings.GOOGLE_CLIENT_ID,
+                "client_id": settings.GOOGLE_CLIENT_ID,
 
-                "client_secret":
-                    settings.GOOGLE_CLIENT_SECRET,
+                "client_secret": settings.GOOGLE_CLIENT_SECRET,
 
-                "auth_uri":
-                    "https://accounts.google.com/o/oauth2/auth",
+                "auth_uri": (
+                    "https://accounts.google.com/"
+                    "o/oauth2/auth"
+                ),
 
-                "token_uri":
-                    "https://oauth2.googleapis.com/token",
+                "token_uri": (
+                    "https://oauth2.googleapis.com/token"
+                ),
 
                 "redirect_uris": [
                     settings.GOOGLE_REDIRECT_URI
@@ -48,8 +55,7 @@ def create_google_flow():
 
         scopes=GOOGLE_SCOPES,
 
-        redirect_uri=
-            settings.GOOGLE_REDIRECT_URI,
+        redirect_uri=settings.GOOGLE_REDIRECT_URI,
     )
 
 
@@ -62,15 +68,30 @@ def google_login(
     request: Request,
 ):
 
-    # --------------------------------------------------
-    # IMPORTANT
-    #
-    # Remove the currently authenticated Zentra user
-    # before starting another Google OAuth flow.
-    #
-    # This prevents the previous application's session
-    # from surviving an account switch.
-    # --------------------------------------------------
+    print()
+    print("=" * 70)
+    print("GOOGLE OAUTH LOGIN")
+    print("=" * 70)
+
+    print(
+        "GOOGLE_CLIENT_ID:",
+        settings.GOOGLE_CLIENT_ID
+    )
+
+    print(
+        "GOOGLE_REDIRECT_URI:",
+        settings.GOOGLE_REDIRECT_URI
+    )
+
+    print(
+        "FRONTEND_URL:",
+        settings.FRONTEND_URL
+    )
+
+    # ==================================================
+    # IMPORTANT:
+    # CLEAR OLD ZENTRA SESSION
+    # ==================================================
 
     request.session.clear()
 
@@ -78,40 +99,41 @@ def google_login(
         "Previous Zentra session cleared."
     )
 
-    # --------------------------------------------------
-    # Create OAuth flow
-    # --------------------------------------------------
+    # ==================================================
+    # CREATE GOOGLE FLOW
+    # ==================================================
 
     flow = create_google_flow()
 
-    # --------------------------------------------------
-    # Force Google account chooser
-    # --------------------------------------------------
+    # ==================================================
+    # FORCE GOOGLE ACCOUNT SELECTOR
+    # ==================================================
 
     authorization_url, state = (
         flow.authorization_url(
             access_type="offline",
 
-            # IMPORTANT:
-            # select_account forces Google to ask
-            # which account should be used.
+            # Force Google to show account selection.
+            #
+            # This is important when switching between
+            # multiple Google accounts.
             prompt="select_account consent",
 
             include_granted_scopes="true",
         )
     )
 
-    # --------------------------------------------------
-    # Store OAuth state
-    # --------------------------------------------------
+    # ==================================================
+    # STORE OAUTH STATE
+    # ==================================================
 
     request.session[
         "oauth_state"
     ] = state
 
-    # --------------------------------------------------
-    # Store PKCE verifier if generated
-    # --------------------------------------------------
+    # ==================================================
+    # STORE PKCE VERIFIER
+    # ==================================================
 
     code_verifier = getattr(
         flow,
@@ -133,9 +155,7 @@ def google_login(
         "Redirecting to Google..."
     )
 
-    print(
-        "=" * 70
-    )
+    print("=" * 70)
 
     return RedirectResponse(
         authorization_url
@@ -158,12 +178,12 @@ def google_callback(
 
     print(
         "REQUEST URL:",
-        str(request.url),
+        str(request.url)
     )
 
     print(
         "CONFIGURED REDIRECT:",
-        settings.GOOGLE_REDIRECT_URI,
+        settings.GOOGLE_REDIRECT_URI
     )
 
     print("=" * 70)
@@ -237,38 +257,333 @@ def google_callback(
         flow.state = state
 
     # ==================================================
-    # CORRECT RENDER / VERCEL PROXY REDIRECT URI
+    # BUILD AUTHORIZATION RESPONSE URL
+    #
+    # IMPORTANT FOR:
+    # VERCEL -> RENDER PROXY
     # ==================================================
 
-    # When proxied via Vercel, request.url host contains the container backend host
-    # (e.g. gdrive-rag-system-h5sf.onrender.com). We construct auth_response_url
-    # using settings.GOOGLE_REDIRECT_URI so it matches flow.redirect_uri exactly.
-    query_str = str(request.url.query) if request.url.query else ""
-    if query_str:
-        auth_response_url = f"{settings.GOOGLE_REDIRECT_URI}?{query_str}"
+    query_string = (
+        str(request.url.query)
+        if request.url.query
+        else ""
+    )
+
+    if query_string:
+
+        auth_response_url = (
+            f"{settings.GOOGLE_REDIRECT_URI}"
+            f"?{query_string}"
+        )
+
     else:
-        auth_response_url = settings.GOOGLE_REDIRECT_URI
+
+        auth_response_url = (
+            settings.GOOGLE_REDIRECT_URI
+        )
 
     print(
         "AUTHORIZATION RESPONSE URL:",
-        auth_response_url,
+        auth_response_url
     )
 
     # ==================================================
     # EXCHANGE CODE FOR TOKEN
     # ==================================================
 
-    flow.fetch_token(
-        authorization_response=
-            auth_response_url
-    )
+    try:
+
+        flow.fetch_token(
+            authorization_response=
+                auth_response_url
+        )
+
+    except Exception as error:
+
+        print()
+        print("=" * 70)
+        print("GOOGLE TOKEN EXCHANGE FAILED")
+        print("=" * 70)
+
+        print(
+            "Error type:",
+            type(error).__name__
+        )
+
+        print(
+            "Error:",
+            str(error)
+        )
+
+        print("=" * 70)
+
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Google OAuth token exchange failed: "
+                f"{error}"
+            ),
+        )
 
     credentials = (
         flow.credentials
     )
 
     # ==================================================
-    # GOOGLE CREDENTIALS
+    # FETCH GOOGLE USER
+    # ==================================================
+
+    try:
+
+        user_response = (
+            flow.oauth2session.get(
+                "https://www.googleapis.com/"
+                "oauth2/v3/userinfo"
+            )
+        )
+
+        user_response.raise_for_status()
+
+        user_info = (
+            user_response.json()
+        )
+
+    except Exception as error:
+
+        print()
+        print("=" * 70)
+        print("GOOGLE USERINFO FAILED")
+        print("=" * 70)
+
+        print(
+            "Error type:",
+            type(error).__name__
+        )
+
+        print(
+            "Error:",
+            str(error)
+        )
+
+        print("=" * 70)
+
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Unable to retrieve Google user "
+                f"information: {error}"
+            ),
+        )
+
+    # ==================================================
+    # BUILD GOOGLE USER
+    # ==================================================
+
+    google_user = {
+        "sub": user_info.get(
+            "sub"
+        ),
+
+        "email": user_info.get(
+            "email"
+        ),
+
+        "name": user_info.get(
+            "name"
+        ),
+
+        "picture": user_info.get(
+            "picture"
+        ),
+    }
+
+    # ==================================================
+    # VALIDATE GOOGLE IDENTITY
+    # ==================================================
+
+    if not google_user["sub"]:
+
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Google did not return "
+                "a user ID."
+            ),
+        )
+
+    if not google_user["email"]:
+
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Google did not return "
+                "an email address."
+            ),
+        )
+
+    # ==================================================
+    # DEBUG:
+    # VERIFY GOOGLE DRIVE TOKEN IDENTITY
+    # ==================================================
+
+    print()
+    print("=" * 70)
+    print("GOOGLE DRIVE TOKEN IDENTITY")
+    print("=" * 70)
+
+    print(
+        "OAuth user email:",
+        google_user.get("email")
+    )
+
+    print(
+        "OAuth user name:",
+        google_user.get("name")
+    )
+
+    print(
+        "OAuth user sub:",
+        google_user.get("sub")
+    )
+
+    print(
+        "Has access token:",
+        bool(credentials.token)
+    )
+
+    print(
+        "Has refresh token:",
+        bool(credentials.refresh_token)
+    )
+
+    print(
+        "Credential scopes:",
+        credentials.scopes
+    )
+
+    try:
+
+        debug_drive = build(
+            "drive",
+            "v3",
+            credentials=credentials,
+            cache_discovery=False,
+        )
+
+        drive_about = (
+            debug_drive.about()
+            .get(
+                fields="user"
+            )
+            .execute()
+        )
+
+        drive_user = (
+            drive_about.get(
+                "user",
+                {}
+            )
+        )
+
+        print()
+        print(
+            "DRIVE ACCOUNT:"
+        )
+
+        print(
+            "Drive email:",
+            drive_user.get(
+                "emailAddress"
+            )
+        )
+
+        print(
+            "Drive name:",
+            drive_user.get(
+                "displayName"
+            )
+        )
+
+        print(
+            "Drive permission ID:",
+            drive_user.get(
+                "permissionId"
+            )
+        )
+
+        # ==================================================
+        # IMPORTANT ACCOUNT COMPARISON
+        # ==================================================
+
+        oauth_email = (
+            google_user.get(
+                "email"
+            )
+        )
+
+        drive_email = (
+            drive_user.get(
+                "emailAddress"
+            )
+        )
+
+        if (
+            oauth_email
+            and drive_email
+            and oauth_email.lower()
+            != drive_email.lower()
+        ):
+
+            print()
+            print(
+                "WARNING:"
+            )
+
+            print(
+                "OAuth account and "
+                "Drive account are different!"
+            )
+
+            print(
+                "OAuth:",
+                oauth_email
+            )
+
+            print(
+                "Drive:",
+                drive_email
+            )
+
+        else:
+
+            print()
+            print(
+                "OAuth account and "
+                "Drive account MATCH."
+            )
+
+    except Exception as error:
+
+        print()
+        print(
+            "GOOGLE DRIVE TOKEN "
+            "IDENTITY CHECK FAILED"
+        )
+
+        print(
+            "Error type:",
+            type(error).__name__
+        )
+
+        print(
+            "Error:",
+            str(error)
+        )
+
+    print("=" * 70)
+
+    # ==================================================
+    # STORE GOOGLE CREDENTIALS
     # ==================================================
 
     request.session[
@@ -294,73 +609,7 @@ def google_callback(
     }
 
     # ==================================================
-    # FETCH GOOGLE USER
-    # ==================================================
-
-    user_response = (
-        flow.oauth2session.get(
-            "https://www.googleapis.com/oauth2/v3/userinfo"
-        )
-    )
-
-    user_response.raise_for_status()
-
-    user_info = (
-        user_response.json()
-    )
-
-    # ==================================================
-    # BUILD USER
-    # ==================================================
-
-    google_user = {
-        "sub":
-            user_info.get(
-                "sub"
-            ),
-
-        "email":
-            user_info.get(
-                "email"
-            ),
-
-        "name":
-            user_info.get(
-                "name"
-            ),
-
-        "picture":
-            user_info.get(
-                "picture"
-            ),
-    }
-
-    # --------------------------------------------------
-    # Validate Google identity
-    # --------------------------------------------------
-
-    if not google_user["sub"]:
-
-        raise HTTPException(
-            status_code=500,
-            detail=(
-                "Google did not return "
-                "a user ID."
-            ),
-        )
-
-    if not google_user["email"]:
-
-        raise HTTPException(
-            status_code=500,
-            detail=(
-                "Google did not return "
-                "an email address."
-            ),
-        )
-
-    # ==================================================
-    # STORE USER IN SESSION
+    # STORE CURRENT GOOGLE USER
     # ==================================================
 
     request.session[
@@ -368,7 +617,7 @@ def google_callback(
     ] = google_user
 
     # ==================================================
-    # CLEAN TEMPORARY OAUTH VALUES
+    # REMOVE TEMPORARY OAUTH VALUES
     # ==================================================
 
     request.session.pop(
@@ -381,18 +630,52 @@ def google_callback(
         None,
     )
 
-    # --------------------------------------------------
-    # IMPORTANT:
-    # Do not carry the previous folder session forward.
-    # The new user must start without an old folder.
-    # --------------------------------------------------
+    # ==================================================
+    # REMOVE OLD DRIVE/FOLDER STATE
+    #
+    # IMPORTANT WHEN SWITCHING USERS
+    # ==================================================
 
     request.session.pop(
         "active_folder_id",
         None,
     )
 
+    request.session.pop(
+        "active_folder_url",
+        None,
+    )
 
+    request.session.pop(
+        "active_folder_name",
+        None,
+    )
+
+    # ==================================================
+    # FINAL AUTH DEBUG
+    # ==================================================
+
+    print()
+    print("=" * 70)
+    print("AUTHENTICATED USER")
+    print("=" * 70)
+
+    print(
+        request.session.get(
+            "google_user"
+        )
+    )
+
+    print(
+        "Session has Google credentials:",
+        bool(
+            request.session.get(
+                "google_credentials"
+            )
+        )
+    )
+
+    print("=" * 70)
 
     # ==================================================
     # FRONTEND REDIRECT
@@ -405,7 +688,7 @@ def google_callback(
 
     print(
         "REDIRECTING TO:",
-        frontend_url,
+        frontend_url
     )
 
     print("=" * 70)
@@ -425,12 +708,30 @@ def get_current_user(
     response: Response,
 ):
 
-    # Prevent browser / CDN from caching auth state.
-    response.headers["Cache-Control"] = (
-        "no-store, no-cache, must-revalidate, private"
+    # ==================================================
+    # NEVER CACHE AUTH STATE
+    # ==================================================
+
+    response.headers[
+        "Cache-Control"
+    ] = (
+        "no-store, "
+        "no-cache, "
+        "must-revalidate, "
+        "private"
     )
 
-    response.headers["Pragma"] = "no-cache"
+    response.headers[
+        "Pragma"
+    ] = "no-cache"
+
+    response.headers[
+        "Expires"
+    ] = "0"
+
+    # ==================================================
+    # GET CURRENT SESSION USER
+    # ==================================================
 
     user = (
         request.session.get(
@@ -438,24 +739,30 @@ def get_current_user(
         )
     )
 
+    print()
     print(
         "AUTH /ME USER:",
-        user,
+        user
     )
+
+    # ==================================================
+    # NOT AUTHENTICATED
+    # ==================================================
 
     if not user:
 
         return {
-            "authenticated":
-                False,
+            "authenticated": False
         }
 
-    return {
-        "authenticated":
-            True,
+    # ==================================================
+    # AUTHENTICATED
+    # ==================================================
 
-        "user":
-            user,
+    return {
+        "authenticated": True,
+
+        "user": user,
     }
 
 
@@ -468,16 +775,34 @@ def logout(
     request: Request,
 ):
 
-    print(
-        "LOGGING OUT USER:",
+    current_user = (
         request.session.get(
             "google_user"
-        ),
+        )
     )
+
+    print()
+    print("=" * 70)
+    print("LOGGING OUT")
+    print("=" * 70)
+
+    print(
+        "USER:",
+        current_user
+    )
+
+    # ==================================================
+    # COMPLETELY CLEAR SESSION
+    # ==================================================
 
     request.session.clear()
 
+    print(
+        "Session cleared."
+    )
+
+    print("=" * 70)
+
     return {
-        "success":
-            True,
+        "success": True
     }
