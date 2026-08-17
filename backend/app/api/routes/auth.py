@@ -62,26 +62,6 @@ def google_login(
     request: Request,
 ):
 
-    print()
-    print("=" * 70)
-    print("GOOGLE OAUTH LOGIN")
-    print("=" * 70)
-
-    print(
-        "GOOGLE_CLIENT_ID:",
-        settings.GOOGLE_CLIENT_ID,
-    )
-
-    print(
-        "GOOGLE_REDIRECT_URI:",
-        settings.GOOGLE_REDIRECT_URI,
-    )
-
-    print(
-        "FRONTEND_URL:",
-        settings.FRONTEND_URL,
-    )
-
     # --------------------------------------------------
     # IMPORTANT
     #
@@ -424,7 +404,7 @@ def google_callback(
     )
 
     print(
-        "REDIRECTING TO:",
+        "REDIRECTING TO:"
         frontend_url,
     )
 
