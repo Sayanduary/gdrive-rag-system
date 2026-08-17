@@ -23,141 +23,238 @@ groq = GroqService()
 # PDF
 # ==================================================
 
-def extract_pdf_page_text(
-    page
-) -> str:
+def extract_pdf_page_text(page) -> str:
+    """
+    Extract native text from a PDF page.
+    """
 
-    return (
-        page.get_text("text")
-        .strip()
-    )
+    try:
+        return page.get_text("text").strip()
+    except Exception as error:
+        print(
+            f"Native PDF text extraction failed: "
+            f"{type(error).__name__}: {error}"
+        )
+        return ""
 
 
 def page_needs_ocr(
     page,
-    min_text_chars: int = 30
+    min_text_chars: int = 30,
 ) -> bool:
+    """
+    Decide whether a PDF page should be sent
+    to vision OCR.
 
-    text = extract_pdf_page_text(
-        page
-    )
+    Pages with very little native text are
+    considered scanned/image pages.
+    """
+
+    text = extract_pdf_page_text(page)
 
     return len(text) < min_text_chars
 
 
 def render_pdf_page(
-    page
+    page,
+    scale: float = 2.0,
 ) -> bytes:
+    """
+    Render a PDF page into PNG bytes.
+
+    2x gives good OCR quality without creating
+    unnecessarily enormous images.
+    """
+
+    print(
+        f"Rendering PDF page at {scale}x..."
+    )
 
     pixmap = page.get_pixmap(
-        matrix=pymupdf.Matrix(2, 2),
-        alpha=False
+        matrix=pymupdf.Matrix(
+            scale,
+            scale,
+        ),
+        alpha=False,
     )
 
     image = Image.frombytes(
         "RGB",
         (
             pixmap.width,
-            pixmap.height
+            pixmap.height,
         ),
-        pixmap.samples
+        pixmap.samples,
     )
 
     buffer = io.BytesIO()
 
     image.save(
         buffer,
-        format="PNG"
+        format="PNG",
+        optimize=True,
     )
 
-    return buffer.getvalue()
+    image_bytes = buffer.getvalue()
+
+    print(
+        f"Rendered image: "
+        f"{pixmap.width}x{pixmap.height}, "
+        f"{len(image_bytes)} bytes"
+    )
+
+    return image_bytes
 
 
 def ocr_pdf_page(
     page,
-    page_number: int
+    page_number: int,
 ) -> str:
+    """
+    OCR one scanned PDF page using Groq Vision.
+    """
 
+    print("=" * 60)
     print(
-        f"Groq Vision OCR: page "
-        f"{page_number}"
+        f"OCR START - PDF PAGE {page_number}"
     )
+    print("=" * 60)
 
-    image_bytes = render_pdf_page(
-        page
-    )
+    try:
 
-    text = groq.ocr_image(
-        image_bytes=image_bytes,
-        mime_type="image/png"
-    )
+        image_bytes = render_pdf_page(
+            page=page,
+            scale=2.0,
+        )
 
-    return text.strip()
+        print(
+            f"Sending page {page_number} "
+            f"to Groq Vision..."
+        )
+
+        text = groq.ocr_image(
+            image_bytes=image_bytes,
+            mime_type="image/png",
+        )
+
+        text = (
+            text.strip()
+            if isinstance(text, str)
+            else ""
+        )
+
+        print(
+            f"OCR SUCCESS - PAGE {page_number}"
+        )
+
+        print(
+            f"OCR characters: {len(text)}"
+        )
+
+        print("=" * 60)
+
+        return text
+
+    except Exception as error:
+
+        print("=" * 60)
+        print(
+            f"OCR FAILED - PDF PAGE "
+            f"{page_number}"
+        )
+        print(
+            f"Error type: "
+            f"{type(error).__name__}"
+        )
+        print(
+            f"Error: {error}"
+        )
+        print("=" * 60)
+
+        # IMPORTANT:
+        # Do not kill the entire PDF because
+        # one OCR page failed.
+        return ""
 
 
 def extract_pdf_text(
-    file_bytes: bytes
+    file_bytes: bytes,
 ) -> str:
+    """
+    Extract complete PDF text.
+
+    Native PDF text is preferred.
+
+    Scanned pages are automatically sent
+    to Groq Vision OCR.
+    """
 
     document = pymupdf.open(
         stream=file_bytes,
-        filetype="pdf"
+        filetype="pdf",
     )
 
     pages = []
 
-    total_pages = len(
-        document
-    )
+    total_pages = len(document)
 
+    print("=" * 70)
     print(
-        f"PDF pages: {total_pages}"
+        f"PDF PAGES: {total_pages}"
     )
+    print("=" * 70)
 
-    for page_number, page in enumerate(
-        document,
-        start=1
-    ):
+    try:
 
-        text = extract_pdf_page_text(
-            page
-        )
+        for page_number, page in enumerate(
+            document,
+            start=1,
+        ):
 
-        # ------------------------------------------
-        # Normal text page
-        # ------------------------------------------
+            print()
+            print(
+                f"Processing PDF page "
+                f"{page_number}/{total_pages}"
+            )
 
-        if not page_needs_ocr(page):
+            text = extract_pdf_page_text(
+                page
+            )
+
+            # ==========================================
+            # NORMAL TEXT PAGE
+            # ==========================================
+
+            if not page_needs_ocr(page):
+
+                print(
+                    f"Page {page_number}: "
+                    f"NATIVE TEXT "
+                    f"({len(text)} chars)"
+                )
+
+                if text:
+
+                    pages.append(
+                        f"PAGE {page_number}\n"
+                        f"{text}"
+                    )
+
+                continue
+
+            # ==========================================
+            # SCANNED PAGE
+            # ==========================================
 
             print(
                 f"Page {page_number}: "
-                f"text extraction "
+                f"SCANNED / LOW TEXT "
                 f"({len(text)} chars)"
             )
 
-            if text:
-
-                pages.append(
-                    f"PAGE {page_number}\n"
-                    f"{text}"
-                )
-
-            continue
-
-        # ------------------------------------------
-        # Scanned/image page
-        # ------------------------------------------
-
-        print(
-            f"Page {page_number}: "
-            f"low text ({len(text)} chars)"
-        )
-
-        try:
-
             ocr_text = ocr_pdf_page(
                 page=page,
-                page_number=page_number
+                page_number=page_number,
             )
 
             if ocr_text:
@@ -169,34 +266,44 @@ def extract_pdf_text(
 
             elif text:
 
-                # Preserve tiny native text if
+                # Preserve any native text if
                 # OCR returned nothing.
-                pages.append(
-                    f"PAGE {page_number}\n"
-                    f"{text}"
+                print(
+                    f"Page {page_number}: "
+                    f"OCR empty; preserving "
+                    f"native text"
                 )
-
-        except Exception as error:
-
-            print(
-                f"OCR failed on page "
-                f"{page_number}: {error}"
-            )
-
-            # Do not lose existing text
-            # if OCR fails.
-            if text:
 
                 pages.append(
                     f"PAGE {page_number}\n"
                     f"{text}"
                 )
 
-    document.close()
+            else:
 
-    return "\n\n".join(
-        pages
-    ).strip()
+                print(
+                    f"Page {page_number}: "
+                    f"NO TEXT EXTRACTED"
+                )
+
+    finally:
+
+        document.close()
+
+    final_text = (
+        "\n\n".join(pages)
+        .strip()
+    )
+
+    print()
+    print("=" * 70)
+    print(
+        f"FINAL PDF TEXT: "
+        f"{len(final_text)} characters"
+    )
+    print("=" * 70)
+
+    return final_text
 
 
 # ==================================================
@@ -205,17 +312,69 @@ def extract_pdf_text(
 
 def extract_image_text(
     file_bytes: bytes,
-    mime_type: str
+    mime_type: str,
 ) -> str:
+    """
+    OCR a standalone image.
+    """
 
-    print(
-        "Using Groq Vision OCR..."
-    )
+    print("=" * 60)
+    print("IMAGE OCR START")
+    print("=" * 60)
 
-    return groq.ocr_image(
-        image_bytes=file_bytes,
-        mime_type=mime_type
-    ).strip()
+    try:
+
+        print(
+            f"Image MIME type: {mime_type}"
+        )
+
+        print(
+            f"Image size: "
+            f"{len(file_bytes)} bytes"
+        )
+
+        text = groq.ocr_image(
+            image_bytes=file_bytes,
+            mime_type=mime_type,
+        )
+
+        text = (
+            text.strip()
+            if isinstance(text, str)
+            else ""
+        )
+
+        print(
+            f"IMAGE OCR SUCCESS - "
+            f"{len(text)} characters"
+        )
+
+        return text
+
+    except Exception as error:
+
+        print(
+            "=" * 60
+        )
+
+        print(
+            "IMAGE OCR FAILED"
+        )
+
+        print(
+            f"Error type: "
+            f"{type(error).__name__}"
+        )
+
+        print(
+            f"Error: {error}"
+        )
+
+        print(
+            "=" * 60
+        )
+
+        return ""
 
 
 # ==================================================
@@ -223,14 +382,14 @@ def extract_image_text(
 # ==================================================
 
 def extract_pptx_shape_text(
-    shape
+    shape,
 ) -> list[str]:
 
     extracted = []
 
-    # ------------------------------------------
-    # Group
-    # ------------------------------------------
+    # ==========================================
+    # GROUP
+    # ==========================================
 
     if shape.shape_type == (
         MSO_SHAPE_TYPE.GROUP
@@ -246,13 +405,13 @@ def extract_pptx_shape_text(
 
         return extracted
 
-    # ------------------------------------------
-    # Text
-    # ------------------------------------------
+    # ==========================================
+    # TEXT
+    # ==========================================
 
     if hasattr(
         shape,
-        "text"
+        "text",
     ):
 
         text = (
@@ -266,9 +425,9 @@ def extract_pptx_shape_text(
                 text
             )
 
-    # ------------------------------------------
-    # Image
-    # ------------------------------------------
+    # ==========================================
+    # IMAGE
+    # ==========================================
 
     if shape.shape_type == (
         MSO_SHAPE_TYPE.PICTURE
@@ -284,7 +443,7 @@ def extract_pptx_shape_text(
                 getattr(
                     shape.image,
                     "content_type",
-                    None
+                    None,
                 )
                 or "image/png"
             )
@@ -296,7 +455,7 @@ def extract_pptx_shape_text(
 
             image_text = groq.ocr_image(
                 image_bytes=image_bytes,
-                mime_type=mime_type
+                mime_type=mime_type,
             )
 
             if image_text:
@@ -308,7 +467,8 @@ def extract_pptx_shape_text(
         except Exception as error:
 
             print(
-                f"PPTX image OCR error: "
+                "PPTX image OCR error: "
+                f"{type(error).__name__}: "
                 f"{error}"
             )
 
@@ -316,7 +476,7 @@ def extract_pptx_shape_text(
 
 
 def extract_pptx_text(
-    file_bytes: bytes
+    file_bytes: bytes,
 ) -> str:
 
     presentation = Presentation(
@@ -327,7 +487,7 @@ def extract_pptx_text(
 
     for slide_number, slide in enumerate(
         presentation.slides,
-        start=1
+        start=1,
     ):
 
         slide_parts = []
@@ -349,9 +509,10 @@ def extract_pptx_text(
                 )
             )
 
-    return "\n\n".join(
-        slides
-    ).strip()
+    return (
+        "\n\n".join(slides)
+        .strip()
+    )
 
 
 # ==================================================
@@ -361,15 +522,24 @@ def extract_pptx_text(
 def parse_file(
     file_bytes: bytes,
     file_name: str,
-    mime_type: str
+    mime_type: str,
 ) -> str:
 
+    print()
+    print("=" * 70)
+    print("FILE PARSER")
+    print("=" * 70)
+
     print(
-        f"Parsing: {file_name}"
+        f"File: {file_name}"
     )
 
     print(
-        f"MIME type: {mime_type}"
+        f"MIME: {mime_type}"
+    )
+
+    print(
+        f"Bytes: {len(file_bytes)}"
     )
 
     # ==================================================
@@ -397,7 +567,7 @@ def parse_file(
 
         text = extract_image_text(
             file_bytes=file_bytes,
-            mime_type=mime_type
+            mime_type=mime_type,
         )
 
         print(
