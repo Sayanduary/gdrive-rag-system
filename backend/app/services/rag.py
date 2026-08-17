@@ -1,18 +1,18 @@
-import json
 import re
 from collections import Counter
 from typing import Generator
 
-import requests
-
-from config import settings
+from app.services.groq import GroqService
 from app.services.vectorstore import VectorStore
+from config import settings
 
 
 class RAGService:
 
     def __init__(self):
+
         self.vector_store = VectorStore()
+        self.groq = GroqService()
 
     # ==================================================
     # CONFIG
@@ -24,13 +24,16 @@ class RAGService:
                 getattr(
                     settings,
                     "TOP_K",
-                    8,
+                    5,
                 )
             )
         except (TypeError, ValueError):
-            value = 8
+            value = 5
 
-        return max(1, min(value, 20))
+        return max(
+            1,
+            min(value, 10),
+        )
 
     def _candidate_k(self) -> int:
         try:
@@ -44,7 +47,23 @@ class RAGService:
         except (TypeError, ValueError):
             value = 100
 
-        return max(20, min(value, 300))
+        return max(
+            20,
+            min(value, 300),
+        )
+
+    def _max_context_chars(self) -> int:
+        """
+        Keeps the final Groq request below the
+        current TPM constraint.
+        """
+        return 12000
+
+    def _max_history_chars(self) -> int:
+        return 3000
+
+    def _max_output_tokens(self) -> int:
+        return 1200
 
     # ==================================================
     # EMPTY RESULTS
@@ -52,6 +71,7 @@ class RAGService:
 
     @staticmethod
     def _empty_results() -> dict:
+
         return {
             "ids": [[]],
             "documents": [[]],
@@ -73,6 +93,7 @@ class RAGService:
     ):
 
         if not user_id:
+
             raise ValueError(
                 "user_id is required for RAG retrieval."
             )
@@ -80,9 +101,14 @@ class RAGService:
         query = query.strip()
 
         if not query:
+
             return self._empty_results()
 
-        if top_k is None or top_k <= 0:
+        if (
+            top_k is None
+            or top_k <= 0
+        ):
+
             top_k = self._candidate_k()
 
         return self.vector_store.search(
@@ -126,17 +152,15 @@ class RAGService:
             "expand",
             "explain",
             "details",
+            "why",
+            "why is that",
+            "how so",
         }
 
-        if normalized in follow_up_phrases:
-            return True
-
-        return len(
-            normalized.split()
-        ) <= 3
+        return normalized in follow_up_phrases
 
     # ==================================================
-    # CONVERSATION HISTORY
+    # HISTORY
     # ==================================================
 
     def build_history(
@@ -147,9 +171,12 @@ class RAGService:
         if not messages:
             return ""
 
-        parts = []
+        recent = messages[-4:]
 
-        for message in messages[-6:]:
+        parts = []
+        total_chars = 0
+
+        for message in recent:
 
             role = message.get(
                 "role",
@@ -167,17 +194,64 @@ class RAGService:
             if not content:
                 continue
 
-            if role == "user":
-                parts.append(
-                    f"USER: {content}"
-                )
+            content = self._trim_text(
+                content,
+                800,
+            )
 
-            elif role == "assistant":
-                parts.append(
-                    f"ASSISTANT: {content}"
-                )
+            block = (
+                f"{role.upper()}: "
+                f"{content}"
+            )
 
-        return "\n".join(parts)
+            if (
+                total_chars
+                + len(block)
+                > self._max_history_chars()
+            ):
+                break
+
+            parts.append(
+                block
+            )
+
+            total_chars += len(
+                block
+            )
+
+        return "\n".join(
+            parts
+        )
+
+    def _build_compact_history(
+        self,
+        messages: list[dict] | None = None,
+    ) -> str:
+
+        return self.build_history(
+            messages
+        )
+
+    # ==================================================
+    # TRIM
+    # ==================================================
+
+    @staticmethod
+    def _trim_text(
+        text: str,
+        max_chars: int,
+    ) -> str:
+
+        if not text:
+            return ""
+
+        if len(text) <= max_chars:
+            return text
+
+        return (
+            text[:max_chars]
+            + "\n\n[truncated]"
+        )
 
     # ==================================================
     # PREVIOUS SOURCES
@@ -191,9 +265,14 @@ class RAGService:
         if not history:
             return []
 
-        for message in reversed(history):
+        for message in reversed(
+            history
+        ):
 
-            if message.get("role") != "assistant":
+            if (
+                message.get("role")
+                != "assistant"
+            ):
                 continue
 
             sources = message.get(
@@ -201,7 +280,13 @@ class RAGService:
                 [],
             )
 
-            if isinstance(sources, list) and sources:
+            if (
+                isinstance(
+                    sources,
+                    list,
+                )
+                and sources
+            ):
                 return sources
 
         return []
@@ -224,7 +309,9 @@ class RAGService:
         previous_user = ""
         previous_assistant = ""
 
-        for message in reversed(history[-6:]):
+        for message in reversed(
+            history[-4:]
+        ):
 
             role = message.get(
                 "role",
@@ -242,16 +329,23 @@ class RAGService:
             if not content:
                 continue
 
+            content = self._trim_text(
+                content,
+                800,
+            )
+
             if (
                 role == "assistant"
                 and not previous_assistant
             ):
+
                 previous_assistant = content
 
             elif (
                 role == "user"
                 and not previous_user
             ):
+
                 previous_user = content
 
             if (
@@ -263,15 +357,17 @@ class RAGService:
         parts = []
 
         if previous_user:
+
             parts.append(
                 "Previous question:\n"
                 + previous_user
             )
 
         if previous_assistant:
+
             parts.append(
                 "Previous answer:\n"
-                + previous_assistant[:1200]
+                + previous_assistant
             )
 
         parts.append(
@@ -279,7 +375,9 @@ class RAGService:
             + question
         )
 
-        return "\n\n".join(parts)
+        return "\n\n".join(
+            parts
+        )
 
     # ==================================================
     # QUERY VARIANTS
@@ -300,9 +398,9 @@ class RAGService:
             question
         ]
 
-        # --------------------------------------------------
-        # History-aware query
-        # --------------------------------------------------
+        # ------------------------------------------
+        # History-aware variant
+        # ------------------------------------------
 
         if history:
 
@@ -317,13 +415,14 @@ class RAGService:
                 history_query
                 and history_query not in variants
             ):
+
                 variants.append(
                     history_query
                 )
 
-        # --------------------------------------------------
-        # Normalized query
-        # --------------------------------------------------
+        # ------------------------------------------
+        # Normalized variant
+        # ------------------------------------------
 
         normalized = re.sub(
             r"[&/,]+",
@@ -341,13 +440,14 @@ class RAGService:
             normalized
             and normalized not in variants
         ):
+
             variants.append(
                 normalized
             )
 
-        # --------------------------------------------------
-        # Regulation / rule query
-        # --------------------------------------------------
+        # ------------------------------------------
+        # Regulation / rule variant
+        # ------------------------------------------
 
         regulation_numbers = re.findall(
             r"\b(?:regulation|rule)\s*(\d+)",
@@ -366,6 +466,7 @@ class RAGService:
                 regulation_query
                 not in variants
             ):
+
                 variants.append(
                     regulation_query
                 )
@@ -425,6 +526,7 @@ class RAGService:
             )
 
             if not vector_id:
+
                 vector_id = (
                     f"{metadata.get('file_id')}:"
                     f"{metadata.get('chunk_id')}"
@@ -442,7 +544,9 @@ class RAGService:
             )
 
             if existing is None:
+
                 merged[vector_id] = current
+
                 continue
 
             if (
@@ -453,6 +557,7 @@ class RAGService:
                     < existing["distance"]
                 )
             ):
+
                 merged[vector_id] = current
 
     # ==================================================
@@ -469,14 +574,17 @@ class RAGService:
                 item["id"]
                 for item in results
             ]],
+
             "documents": [[
                 item["document"]
                 for item in results
             ]],
+
             "metadatas": [[
                 item["metadata"]
                 for item in results
             ]],
+
             "distances": [[
                 item["distance"]
                 for item in results
@@ -507,17 +615,32 @@ class RAGService:
         document: str,
     ) -> float:
 
-        query_tokens = self._tokenize(query)
-        document_tokens = self._tokenize(document)
+        query_tokens = (
+            self._tokenize(
+                query
+            )
+        )
+
+        document_tokens = (
+            self._tokenize(
+                document
+            )
+        )
 
         if (
             not query_tokens
             or not document_tokens
         ):
+
             return 0.0
 
-        query_counts = Counter(query_tokens)
-        document_counts = Counter(document_tokens)
+        query_counts = Counter(
+            query_tokens
+        )
+
+        document_counts = Counter(
+            document_tokens
+        )
 
         total = sum(
             query_counts.values()
@@ -528,9 +651,12 @@ class RAGService:
 
         matched = 0.0
 
-        for token, count in query_counts.items():
+        for token, count in (
+            query_counts.items()
+        ):
 
             if token in document_counts:
+
                 matched += min(
                     count,
                     document_counts[token],
@@ -584,7 +710,9 @@ class RAGService:
 
         return {
             token
-            for token in self._tokenize(query)
+            for token in self._tokenize(
+                query
+            )
             if (
                 token not in stop_words
                 and len(token) >= 3
@@ -615,8 +743,10 @@ class RAGService:
 
         if (
             query_normalized
-            and query_normalized in document_normalized
+            and query_normalized
+            in document_normalized
         ):
+
             return 1.0
 
         important_terms = (
@@ -654,8 +784,11 @@ class RAGService:
         )
 
         if distance is None:
+
             semantic_score = 0.0
+
         else:
+
             semantic_score = max(
                 0.0,
                 1.0 - float(distance),
@@ -711,7 +844,9 @@ class RAGService:
                 (
                     0.0
                     if item["distance"] is None
-                    else -float(item["distance"])
+                    else -float(
+                        item["distance"]
+                    )
                 ),
             ),
             reverse=True,
@@ -720,7 +855,7 @@ class RAGService:
         return results
 
     # ==================================================
-    # FINAL RESULT SELECTION
+    # FINAL SEMANTIC SELECTION
     # ==================================================
 
     def _select_final_results(
@@ -747,20 +882,31 @@ class RAGService:
             )
 
             file_id = (
-                metadata.get("file_id")
-                or metadata.get("file_name")
+                metadata.get(
+                    "file_id"
+                )
+                or metadata.get(
+                    "file_name"
+                )
                 or item["id"]
             )
 
-            current_count = file_counts.get(
-                file_id,
-                0,
+            current_count = (
+                file_counts.get(
+                    file_id,
+                    0,
+                )
             )
 
-            if current_count >= max_chunks_per_file:
+            if (
+                current_count
+                >= max_chunks_per_file
+            ):
                 continue
 
-            selected.append(item)
+            selected.append(
+                item
+            )
 
             file_counts[file_id] = (
                 current_count + 1
@@ -770,6 +916,7 @@ class RAGService:
                 break
 
         for item in selected:
+
             item.pop(
                 "_score",
                 None,
@@ -789,7 +936,9 @@ class RAGService:
         history: list[dict] | None = None,
     ) -> dict:
 
-        candidate_k = self._candidate_k()
+        candidate_k = (
+            self._candidate_k()
+        )
 
         merged = {}
 
@@ -809,8 +958,7 @@ class RAGService:
                 # Mandatory tenant boundary.
                 user_id=user_id,
 
-                # IMPORTANT:
-                # Search all folders for this user.
+                # Normal chat searches all folders.
                 folder_id=None,
                 file_id=None,
             )
@@ -825,7 +973,10 @@ class RAGService:
         )
 
         if not candidates:
-            return self._format_results([])
+
+            return self._format_results(
+                []
+            )
 
         candidates = self._rerank(
             query=question,
@@ -863,7 +1014,10 @@ class RAGService:
         )
 
         if not previous_sources:
-            return self._format_results([])
+
+            return self._format_results(
+                []
+            )
 
         merged = {}
 
@@ -884,6 +1038,7 @@ class RAGService:
                 file_id
                 and file_id not in file_ids
             ):
+
                 file_ids.append(
                     file_id
                 )
@@ -908,7 +1063,10 @@ class RAGService:
         )
 
         if not candidates:
-            return self._format_results([])
+
+            return self._format_results(
+                []
+            )
 
         candidates = self._rerank(
             query=question,
@@ -928,6 +1086,206 @@ class RAGService:
         )
 
     # ==================================================
+    # ADJACENT CHUNK EXPANSION
+    # ==================================================
+
+    def _expand_adjacent_chunks(
+        self,
+        results: dict,
+        user_id: str,
+        radius: int = 1,
+    ) -> dict:
+        """
+        Expand each semantic result with neighboring chunks
+        from the same file.
+
+        Example:
+
+            semantic result: chunk 5
+
+            expansion:
+                4
+                5
+                6
+
+        This helps documents where a regulation/section
+        continues across chunk boundaries.
+        """
+
+        metadatas = results.get(
+            "metadatas",
+            [[]],
+        )[0]
+
+        if not metadatas:
+
+            return results
+
+        grouped: dict[str, list[int]] = {}
+
+        for metadata in metadatas:
+
+            metadata = metadata or {}
+
+            file_id = metadata.get(
+                "file_id"
+            )
+
+            chunk_id = metadata.get(
+                "chunk_id"
+            )
+
+            if (
+                not file_id
+                or chunk_id is None
+            ):
+                continue
+
+            grouped.setdefault(
+                file_id,
+                []
+            ).append(
+                int(chunk_id)
+            )
+
+        merged = {}
+
+        documents = results.get(
+            "documents",
+            [[]],
+        )[0]
+
+        ids = results.get(
+            "ids",
+            [[]],
+        )[0]
+
+        distances = results.get(
+            "distances",
+            [[]],
+        )[0]
+
+        # ------------------------------------------
+        # Keep original semantic results
+        # ------------------------------------------
+
+        for index, metadata in enumerate(
+            metadatas
+        ):
+
+            metadata = metadata or {}
+
+            if index >= len(ids):
+                continue
+
+            vector_id = ids[index]
+
+            merged[vector_id] = {
+                "id": vector_id,
+
+                "document":
+                    documents[index],
+
+                "metadata":
+                    metadata,
+
+                "distance": (
+                    distances[index]
+                    if index < len(distances)
+                    else None
+                ),
+            }
+
+        # ------------------------------------------
+        # Load adjacent chunks
+        # ------------------------------------------
+
+        for file_id, chunk_ids in (
+            grouped.items()
+        ):
+
+            adjacent = (
+                self.vector_store.get_adjacent_chunks(
+                    user_id=user_id,
+                    file_id=file_id,
+                    chunk_ids=chunk_ids,
+                    radius=radius,
+                )
+            )
+
+            adjacent_ids = adjacent.get(
+                "ids",
+                [],
+            )
+
+            adjacent_docs = adjacent.get(
+                "documents",
+                [],
+            )
+
+            adjacent_meta = adjacent.get(
+                "metadatas",
+                [],
+            )
+
+            for index, vector_id in enumerate(
+                adjacent_ids
+            ):
+
+                if vector_id in merged:
+                    continue
+
+                if (
+                    index >= len(adjacent_docs)
+                    or index >= len(adjacent_meta)
+                ):
+                    continue
+
+                merged[vector_id] = {
+                    "id": vector_id,
+
+                    "document":
+                        adjacent_docs[index],
+
+                    "metadata":
+                        adjacent_meta[index],
+
+                    # Neighboring chunks do not have
+                    # semantic distances because they were
+                    # retrieved by adjacency rather than
+                    # vector search.
+                    "distance": None,
+                }
+
+        # ------------------------------------------
+        # Document order
+        # ------------------------------------------
+
+        ordered = list(
+            merged.values()
+        )
+
+        ordered.sort(
+            key=lambda item: (
+                item["metadata"].get(
+                    "file_id",
+                    "",
+                ),
+
+                int(
+                    item["metadata"].get(
+                        "chunk_id",
+                        0,
+                    )
+                ),
+            )
+        )
+
+        return self._format_results(
+            ordered
+        )
+
+    # ==================================================
     # HISTORY-AWARE RETRIEVAL
     # ==================================================
 
@@ -941,6 +1299,7 @@ class RAGService:
     ):
 
         if not user_id:
+
             raise ValueError(
                 "user_id is required for retrieval."
             )
@@ -949,9 +1308,13 @@ class RAGService:
             top_k is None
             or top_k <= 0
         ):
+
             top_k = self._final_k()
 
-        # Follow-up: search previous files first.
+        # ------------------------------------------
+        # Explicit follow-up
+        # ------------------------------------------
+
         if self.is_follow_up_question(
             question
         ):
@@ -966,14 +1329,36 @@ class RAGService:
             )
 
             if follow_up_results["ids"][0]:
-                return follow_up_results
 
-        # Normal question: search ALL user files.
-        return self.retrieve_from_all_files(
-            question=question,
-            top_k=top_k,
-            user_id=user_id,
-            history=history,
+                return (
+                    self._expand_adjacent_chunks(
+                        results=follow_up_results,
+                        user_id=user_id,
+                        radius=1,
+                    )
+                )
+
+        # ------------------------------------------
+        # Normal question
+        #
+        # Searches ALL files owned by this user.
+        # ------------------------------------------
+
+        results = (
+            self.retrieve_from_all_files(
+                question=question,
+                top_k=top_k,
+                user_id=user_id,
+                history=history,
+            )
+        )
+
+        return (
+            self._expand_adjacent_chunks(
+                results=results,
+                user_id=user_id,
+                radius=1,
+            )
         )
 
     # ==================================================
@@ -997,21 +1382,41 @@ class RAGService:
 
         context_parts = []
 
+        remaining = (
+            self._max_context_chars()
+        )
+
         for document, metadata in zip(
             documents,
             metadatas,
         ):
 
+            if remaining <= 0:
+                break
+
             metadata = metadata or {}
 
-            context_parts.append(
-                (
-                    "FILE:\n"
-                    f"{metadata.get('file_name')}\n\n"
-                    "CONTENT:\n"
-                    f"{document}"
-                )
+            block = (
+                "FILE:\n"
+                f"{metadata.get('file_name')}\n\n"
+                "CHUNK {chunk_id}:\n"
+                f"{metadata.get('chunk_id')}\n\n"
+                "CONTENT:\n"
+                f"{document}"
             )
+
+            if len(block) > remaining:
+
+                block = (
+                    block[:remaining]
+                    + "\n\n[truncated]"
+                )
+
+            context_parts.append(
+                block
+            )
+
+            remaining -= len(block)
 
         return "\n\n---\n\n".join(
             context_parts
@@ -1031,42 +1436,40 @@ You are a document question-answering assistant.
 Answer the CURRENT USER QUESTION using ONLY the
 DOCUMENT CONTEXT.
 
-IMPORTANT ANSWER RULES:
+Rules:
 
-1. Read ALL retrieved document content before answering.
-2. Do not give an unnecessarily short answer.
-3. Give a complete answer supported by the documents.
-4. Include all relevant definitions, clauses, conditions,
-   exceptions, notes, numbered items, and explanations
-   that directly answer the question.
-5. If the question asks about a regulation, rule, section,
-   definition, or policy, explain the relevant details
-   rather than giving only a one-line summary.
-6. If the relevant information is spread across multiple
-   chunks, combine the chunks into one coherent answer.
-7. Preserve the terminology used in the documents.
-8. Do not use outside knowledge.
-9. Do not invent facts, numbers, dates, regulations,
+1. Read all provided document context before answering.
+2. Use only information supported by the documents.
+3. Combine information from multiple chunks when necessary.
+4. Preserve the original order and meaning of numbered
+   clauses, definitions, rules, and regulations.
+5. Do not use outside knowledge.
+6. Do not invent facts, dates, numbers, regulations,
    rules, definitions, or conclusions.
-10. Conversation history is only for resolving references
-    such as "this", "that", "it", "more", or
-    "tell me more".
-11. Never discuss the conversation history.
-12. Never explain your reasoning.
-13. Never mention RAG, ChromaDB, embeddings, vector search,
-    retrieval, chunks, distances, candidate counts,
-    internal metadata, or source numbering.
-14. Never say "Source 1", "Source 2", "Source 3", etc.
-15. Do not mention filenames unless the user asks for them
-    or identifying the document is genuinely useful.
-16. Use headings or numbered points when they make a
-    detailed answer easier to read.
-17. If the documents genuinely do not contain enough
-    information, say exactly:
+7. Conversation history is only for resolving references
+   such as "this", "that", "it", "more", or
+   "tell me more".
+8. Never discuss conversation history.
+9. Never explain your reasoning.
+10. Never mention RAG, ChromaDB, PostgreSQL, pgvector,
+    embeddings, vector search, retrieval, chunks,
+    distances, candidate counts, or internal metadata.
+11. Never say "Source 1", "Source 2", "Source 3", etc.
+12. Do not mention filenames unless useful or explicitly
+    requested.
+13. Do not stop at the first matching sentence when the
+    context contains additional relevant details.
+14. For regulations, rules, policies, and definitions,
+    include relevant sub-points, conditions, exceptions,
+    notes, and numbered clauses.
+15. Adjacent chunks may contain continuations of the same
+    section. Combine them into one coherent answer.
+16. If the documents genuinely do not contain enough
+    information, say:
 
 "I could not find the answer in the provided documents."
 
-Return the answer directly.
+Answer directly and naturally.
 """.strip()
 
     # ==================================================
@@ -1081,57 +1484,43 @@ Return the answer directly.
     ) -> str:
 
         history_text = (
-            self.build_history(
+            self._build_compact_history(
                 history
             )
         )
 
-        if history_text:
+        if not history_text:
 
-            history_section = (
-                "CONVERSATION HISTORY:\n"
-                "---------------------\n"
-                f"{history_text}\n"
-                "---------------------"
-            )
-
-        else:
-
-            history_section = (
-                "CONVERSATION HISTORY:\n"
-                "---------------------\n"
-                "None.\n"
-                "---------------------"
-            )
+            history_text = "None."
 
         return f"""
-{history_section}
+RECENT CONVERSATION:
+{history_text}
 
 DOCUMENT CONTEXT:
-=================
 {context}
-=================
 
 CURRENT USER QUESTION:
 {query}
 
-ANSWER REQUIREMENTS:
+Answer the current question using the document context.
 
-- Answer the current question directly.
-- Use all relevant information in the document context.
-- Do not stop after the first matching sentence.
-- Include relevant definitions, sub-points, conditions,
-  exceptions, and notes when they are present.
-- Combine information from adjacent chunks when they
-  belong to the same section.
-- Do not mention source numbers or retrieval details.
-- Do not use outside knowledge.
+Use all relevant information available.
+Combine adjacent chunks when they belong to the
+same section or regulation.
 
-Provide a complete, document-grounded answer.
+Do not stop after the first matching sentence.
+
+Do not mention retrieval, RAG, embeddings, chunks,
+distances, source numbers, or internal metadata.
+
+Do not use outside knowledge.
+
+Return a complete, document-grounded answer.
 """.strip()
 
     # ==================================================
-    # NORMAL GENERATION
+    # GROQ GENERATION
     # ==================================================
 
     def generate_answer(
@@ -1147,67 +1536,30 @@ Provide a complete, document-grounded answer.
             history=history,
         )
 
-        response = requests.post(
-            f"{settings.LM_STUDIO_BASE_URL}/api/v1/chat",
-            json={
-                "model": settings.LM_STUDIO_MODEL,
-                "system_prompt": self.get_system_prompt(),
-                "input": user_input,
-                "stream": False,
-                "temperature": 0.1,
-            },
-            timeout=180,
-        )
+        try:
 
-        if not response.ok:
+            return self.groq.generate_text(
+                system_prompt=
+                    self.get_system_prompt(),
 
-            raise RuntimeError(
-                "LM Studio request failed:\n"
-                f"Status: {response.status_code}\n"
-                f"Body: {response.text}"
+                user_prompt=
+                    user_input,
+
+                temperature=0.1,
+
+                max_tokens=
+                    self._max_output_tokens(),
             )
 
-        data = response.json()
+        except Exception as error:
 
-        output = data.get(
-            "output",
-            [],
-        )
-
-        if isinstance(output, list):
-
-            for item in output:
-
-                if (
-                    item.get("type")
-                    == "message"
-                ):
-
-                    content = item.get(
-                        "content",
-                        "",
-                    )
-
-                    if isinstance(
-                        content,
-                        str,
-                    ):
-                        return content.strip()
-
-        fallback = data.get(
-            "response"
-        )
-
-        if isinstance(
-            fallback,
-            str,
-        ):
-            return fallback.strip()
-
-        return ""
+            raise RuntimeError(
+                "Groq generation failed: "
+                f"{error}"
+            ) from error
 
     # ==================================================
-    # STREAMING
+    # GROQ STREAMING
     # ==================================================
 
     def stream_answer(
@@ -1215,7 +1567,11 @@ Provide a complete, document-grounded answer.
         query: str,
         context: str,
         history: list[dict] | None = None,
-    ) -> Generator[dict, None, None]:
+    ) -> Generator[
+        dict,
+        None,
+        None,
+    ]:
 
         user_input = self.build_user_input(
             query=query,
@@ -1225,144 +1581,30 @@ Provide a complete, document-grounded answer.
 
         try:
 
-            response = requests.post(
-                f"{settings.LM_STUDIO_BASE_URL}/api/v1/chat",
-                json={
-                    "model": settings.LM_STUDIO_MODEL,
-                    "system_prompt": self.get_system_prompt(),
-                    "input": user_input,
-                    "stream": True,
-                    "temperature": 0.1,
-                },
-                stream=True,
-                timeout=180,
-            )
+            for token in (
+                self.groq.stream_text(
+                    system_prompt=
+                        self.get_system_prompt(),
 
-        except requests.RequestException as error:
+                    user_prompt=
+                        user_input,
 
-            yield {
-                "type": "error",
-                "content": str(error),
-            }
+                    temperature=0.1,
 
-            return
-
-        if not response.ok:
-
-            yield {
-                "type": "error",
-                "content": (
-                    "LM Studio request failed: "
-                    f"{response.status_code} "
-                    f"{response.text}"
-                ),
-            }
-
-            response.close()
-            return
-
-        try:
-
-            for raw_line in response.iter_lines(
-                decode_unicode=True
+                    max_tokens=
+                        self._max_output_tokens(),
+                )
             ):
 
-                if not raw_line:
-                    continue
-
-                line = raw_line.strip()
-
-                if not line.startswith("data:"):
-                    continue
-
-                payload = (
-                    line[5:].strip()
-                )
-
-                if not payload:
-                    continue
-
-                try:
-                    data = json.loads(
-                        payload
-                    )
-                except json.JSONDecodeError:
-                    continue
-
-                event_type = data.get(
-                    "type",
-                    "",
-                )
-
-                # ------------------------------------------
-                # TOKEN
-                # ------------------------------------------
-
-                if event_type == "message.delta":
-
-                    content = data.get(
-                        "content",
-                        "",
-                    )
-
-                    if content:
-
-                        yield {
-                            "type": "token",
-                            "content": content,
-                        }
-
-                # ------------------------------------------
-                # ERROR
-                # ------------------------------------------
-
-                elif event_type == "error":
-
-                    error_message = (
-                        data.get("message")
-                        or "LM Studio streaming error."
-                    )
-
-                    error_data = data.get(
-                        "error"
-                    )
-
-                    if isinstance(
-                        error_data,
-                        dict,
-                    ):
-
-                        error_message = (
-                            error_data.get(
-                                "message",
-                                error_message,
-                            )
-                        )
+                if token:
 
                     yield {
-                        "type": "error",
-                        "content": error_message,
+                        "type": "token",
+                        "content": token,
                     }
-
-                    return
-
-                # ------------------------------------------
-                # COMPLETE
-                # ------------------------------------------
-
-                elif event_type == "chat.end":
-
-                    yield {
-                        "type": "done",
-                    }
-
-                    return
-
-        except requests.RequestException as error:
 
             yield {
-                "type": "error",
-                "content": str(error),
+                "type": "done",
             }
 
         except Exception as error:
@@ -1371,10 +1613,6 @@ Provide a complete, document-grounded answer.
                 "type": "error",
                 "content": str(error),
             }
-
-        finally:
-
-            response.close()
 
     # ==================================================
     # UNIQUE SOURCES
@@ -1425,22 +1663,30 @@ Provide a complete, document-grounded answer.
 
             distance = None
 
-            if index < len(distances):
-                distance = distances[index]
+            if index < len(
+                distances
+            ):
+
+                distance = distances[
+                    index
+                ]
 
             sources.append({
                 "file_name":
                     metadata.get(
                         "file_name"
                     ),
+
                 "file_id":
                     metadata.get(
                         "file_id"
                     ),
+
                 "path":
                     metadata.get(
                         "path"
                     ),
+
                 "distance":
                     distance,
             })
@@ -1461,14 +1707,17 @@ Provide a complete, document-grounded answer.
     ):
 
         if not user_id:
+
             raise ValueError(
                 "user_id is required for RAG query."
             )
 
         final_k = (
             top_k
-            if top_k is not None
-            and top_k > 0
+            if (
+                top_k is not None
+                and top_k > 0
+            )
             else self._final_k()
         )
 
@@ -1478,6 +1727,8 @@ Provide a complete, document-grounded answer.
                 history=history,
                 top_k=final_k,
                 user_id=user_id,
+
+                # Normal chat searches all user files.
                 folder_id=None,
             )
         )
@@ -1494,7 +1745,9 @@ Provide a complete, document-grounded answer.
 
         return {
             "answer": answer,
-            "sources": self.build_sources(
-                results
-            ),
+
+            "sources":
+                self.build_sources(
+                    results
+                ),
         }

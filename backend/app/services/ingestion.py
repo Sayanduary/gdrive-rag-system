@@ -13,6 +13,7 @@ SUPPORTED_MIME_TYPES = {
     "image/jpeg",
     "image/png",
     "image/jpg",
+    "image/webp",
     "application/vnd.openxmlformats-officedocument.presentationml.presentation",
 }
 
@@ -22,11 +23,15 @@ class IngestionService:
     def __init__(
         self,
         drive_service,
-        user_id: str
+        user_id: str,
     ):
 
-        self.drive_service = drive_service
+        if not user_id:
+            raise ValueError(
+                "user_id is required for ingestion."
+            )
 
+        self.drive_service = drive_service
         self.user_id = user_id
 
         self.vector_store = VectorStore()
@@ -37,8 +42,13 @@ class IngestionService:
 
     def ingest_folder(
         self,
-        folder_id: str
+        folder_id: str,
     ):
+
+        if not folder_id:
+            raise ValueError(
+                "folder_id is required."
+            )
 
         print()
         print("=" * 70)
@@ -54,12 +64,12 @@ class IngestionService:
         )
 
         # --------------------------------------------------
-        # Get current files from Google Drive
+        # Get current Drive files
         # --------------------------------------------------
 
         drive_files = recursive_list_files(
             self.drive_service,
-            folder_id
+            folder_id,
         )
 
         print(
@@ -68,14 +78,13 @@ class IngestionService:
         )
 
         # --------------------------------------------------
-        # Get files already indexed for THIS USER +
-        # THIS FOLDER
+        # Get indexed files for this user + folder
         # --------------------------------------------------
 
         indexed_files = (
             self.vector_store.get_indexed_files(
                 user_id=self.user_id,
-                folder_id=folder_id
+                folder_id=folder_id,
             )
         )
 
@@ -86,7 +95,6 @@ class IngestionService:
 
         results = []
 
-        # Track Drive file IDs for deletion detection
         drive_file_ids = set()
 
         # ==================================================
@@ -96,9 +104,7 @@ class IngestionService:
         for file in drive_files:
 
             file_id = file["id"]
-
             file_name = file["name"]
-
             mime_type = file["mimeType"]
 
             modified_time = file.get(
@@ -115,27 +121,21 @@ class IngestionService:
 
             print()
             print("=" * 70)
-
             print(
                 f"File: {file_name}"
             )
-
             print(
                 f"Path: {file_path}"
             )
-
             print(
                 f"File ID: {file_id}"
             )
-
             print(
                 f"MIME Type: {mime_type}"
             )
-
             print(
                 f"Modified: {modified_time}"
             )
-
             print("=" * 70)
 
             # --------------------------------------------------
@@ -152,14 +152,10 @@ class IngestionService:
                     "file_id": file_id,
                     "file_name": file_name,
                     "status": "skipped",
-                    "reason": "unsupported_file_type"
+                    "reason": "unsupported_file_type",
                 })
 
                 continue
-
-            # --------------------------------------------------
-            # Check existing indexed file
-            # --------------------------------------------------
 
             indexed_file = indexed_files.get(
                 file_id
@@ -193,27 +189,21 @@ class IngestionService:
                     results.append({
                         "file_id": file_id,
                         "file_name": file_name,
-                        "status": "unchanged"
+                        "status": "unchanged",
                     })
 
                     continue
-
-                # ------------------------------------------
-                # Modified
-                # ------------------------------------------
 
                 print(
                     "MODIFIED: Re-indexing file."
                 )
 
-                self.vector_store.delete_file(
-                    file_id=file_id,
-                    user_id=self.user_id,
-                    folder_id=folder_id
-                )
-
             # ==================================================
-            # NEW OR MODIFIED FILE
+            # DOWNLOAD + PARSE + CHUNK FIRST
+            #
+            # We intentionally do NOT delete the old chunks
+            # yet. If parsing/OCR/embedding fails, the old
+            # indexed version remains available.
             # ==================================================
 
             try:
@@ -228,7 +218,7 @@ class IngestionService:
 
                 file_bytes = download_file(
                     self.drive_service,
-                    file_id
+                    file_id,
                 )
 
                 print(
@@ -243,7 +233,7 @@ class IngestionService:
                 text = parse_file(
                     file_bytes=file_bytes,
                     file_name=file_name,
-                    mime_type=mime_type
+                    mime_type=mime_type,
                 )
 
                 print(
@@ -258,15 +248,14 @@ class IngestionService:
                 if not text.strip():
 
                     print(
-                        "No text extracted. "
-                        "Skipping."
+                        "No text extracted."
                     )
 
                     results.append({
                         "file_id": file_id,
                         "file_name": file_name,
                         "status": "failed",
-                        "error": "No text extracted"
+                        "error": "No text extracted",
                     })
 
                     continue
@@ -290,25 +279,23 @@ class IngestionService:
                         "file_id": file_id,
                         "file_name": file_name,
                         "status": "failed",
-                        "error": "No chunks generated"
+                        "error": "No chunks generated",
                     })
 
                     continue
 
                 # ------------------------------------------
-                # Metadata
+                # Build IDs + metadata
                 # ------------------------------------------
 
                 ids = []
-
                 metadatas = []
 
                 for index, chunk in enumerate(
                     chunks
                 ):
 
-                    # Scope the Chroma ID by user +
-                    # folder + Drive file.
+                    # Stable tenant/file/chunk ID.
                     chunk_id = (
                         f"{self.user_id}_"
                         f"{folder_id}_"
@@ -321,18 +308,33 @@ class IngestionService:
                     )
 
                     metadatas.append({
-                        "user_id": self.user_id,
-                        "folder_id": folder_id,
-                        "file_id": file_id,
-                        "file_name": file_name,
-                        "mime_type": mime_type,
-                        "modified_time": modified_time,
-                        "path": file_path,
-                        "chunk_id": index,
+                        "user_id":
+                            self.user_id,
+
+                        "folder_id":
+                            folder_id,
+
+                        "file_id":
+                            file_id,
+
+                        "file_name":
+                            file_name,
+
+                        "mime_type":
+                            mime_type,
+
+                        "modified_time":
+                            modified_time,
+
+                        "path":
+                            file_path,
+
+                        "chunk_id":
+                            index,
                     })
 
                 # ------------------------------------------
-                # Embed + store
+                # Generate embeddings + store in PostgreSQL
                 # ------------------------------------------
 
                 print(
@@ -342,22 +344,62 @@ class IngestionService:
                 self.vector_store.add_documents(
                     texts=chunks,
                     metadatas=metadatas,
-                    ids=ids
+                    ids=ids,
                 )
 
+                # ------------------------------------------
+                # Delete previous version ONLY after the
+                # new chunks have successfully been stored.
+                #
+                # Because IDs are stable, this is mostly
+                # relevant when chunk counts decrease.
+                # ------------------------------------------
+
+                if indexed_file:
+
+                    print(
+                        "Removing old chunks..."
+                    )
+
+                    # IMPORTANT:
+                    # Delete all rows for this file first,
+                    # then restore the newly generated chunks
+                    # if the IDs overlap.
+                    #
+                    # But the PostgreSQL upsert above cannot
+                    # remove stale old chunk IDs when the new
+                    # version has fewer chunks.
+                    #
+                    # Therefore we remove stale chunks below
+                    # using the current chunk count.
+
+                    self._delete_stale_chunks(
+                        file_id=file_id,
+                        user_id=self.user_id,
+                        folder_id=folder_id,
+                        new_chunk_count=len(chunks),
+                    )
+
                 print(
-                    "Successfully indexed."
+                    "Successfully indexed in PostgreSQL."
                 )
 
                 results.append({
-                    "file_id": file_id,
-                    "file_name": file_name,
-                    "status": (
-                        "modified"
-                        if indexed_file
-                        else "new"
-                    ),
-                    "chunks": len(chunks)
+                    "file_id":
+                        file_id,
+
+                    "file_name":
+                        file_name,
+
+                    "status":
+                        (
+                            "modified"
+                            if indexed_file
+                            else "new"
+                        ),
+
+                    "chunks":
+                        len(chunks),
                 })
 
             except Exception as error:
@@ -367,19 +409,28 @@ class IngestionService:
                 )
 
                 results.append({
-                    "file_id": file_id,
-                    "file_name": file_name,
-                    "status": "failed",
-                    "error": str(error)
+                    "file_id":
+                        file_id,
+
+                    "file_name":
+                        file_name,
+
+                    "status":
+                        "failed",
+
+                    "error":
+                        str(error),
                 })
 
         # ==================================================
-        # DETECT DELETED FILES
+        # DETECT DELETED DRIVE FILES
         # ==================================================
 
         deleted_files = []
 
-        for file_id, file_info in indexed_files.items():
+        for file_id, file_info in (
+            indexed_files.items()
+        ):
 
             if file_id not in drive_file_ids:
 
@@ -393,15 +444,20 @@ class IngestionService:
                 self.vector_store.delete_file(
                     file_id=file_id,
                     user_id=self.user_id,
-                    folder_id=folder_id
+                    folder_id=folder_id,
                 )
 
                 deleted_files.append({
-                    "file_id": file_id,
-                    "file_name": file_info.get(
-                        "file_name"
-                    ),
-                    "status": "deleted"
+                    "file_id":
+                        file_id,
+
+                    "file_name":
+                        file_info.get(
+                            "file_name"
+                        ),
+
+                    "status":
+                        "deleted",
                 })
 
         results.extend(
@@ -451,12 +507,11 @@ class IngestionService:
         indexed_count = (
             self.vector_store.count(
                 user_id=self.user_id,
-                folder_id=folder_id
+                folder_id=folder_id,
             )
         )
 
         print()
-
         print("=" * 70)
         print("ANALYSIS SUMMARY")
         print("=" * 70)
@@ -493,15 +548,83 @@ class IngestionService:
         print("=" * 70)
 
         return {
-            "total_files": len(
-                drive_files
-            ),
-            "new": new_count,
-            "modified": modified_count,
-            "unchanged": unchanged_count,
-            "deleted": deleted_count,
-            "skipped": skipped_count,
-            "failed": failed_count,
-            "indexed_documents": indexed_count,
-            "results": results
+            "total_files":
+                len(drive_files),
+
+            "new":
+                new_count,
+
+            "modified":
+                modified_count,
+
+            "unchanged":
+                unchanged_count,
+
+            "deleted":
+                deleted_count,
+
+            "skipped":
+                skipped_count,
+
+            "failed":
+                failed_count,
+
+            "indexed_documents":
+                indexed_count,
+
+            "results":
+                results,
         }
+
+    # ==================================================
+    # DELETE STALE CHUNKS
+    # ==================================================
+
+    def _delete_stale_chunks(
+        self,
+        file_id: str,
+        user_id: str,
+        folder_id: str,
+        new_chunk_count: int,
+    ):
+        """
+        Remove old chunk IDs when a modified file now
+        produces fewer chunks than before.
+
+        The current VectorStore API does not expose
+        delete-by-chunk-id, so we retrieve the file's
+        chunks and delete stale ones from PostgreSQL.
+        """
+
+        existing = (
+            self.vector_store.get_file_chunks(
+                file_id=file_id,
+                user_id=user_id,
+                folder_id=folder_id,
+            )
+        )
+
+        existing_ids = existing.get(
+            "ids",
+            [],
+        )
+
+        stale_ids = []
+
+        for index, vector_id in enumerate(
+            existing_ids
+        ):
+
+            if index >= new_chunk_count:
+
+                stale_ids.append(
+                    vector_id
+                )
+
+        if not stale_ids:
+            return
+
+        self.vector_store.delete_chunks(
+            ids=stale_ids,
+            user_id=user_id,
+        )

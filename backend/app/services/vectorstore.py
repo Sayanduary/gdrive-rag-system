@@ -1,37 +1,95 @@
-from pathlib import Path
-
-import chromadb
 from fastembed import TextEmbedding
+from psycopg.rows import dict_row
+from psycopg_pool import ConnectionPool
 
-
-BASE_DIR = Path(__file__).resolve().parents[2]
-
-CHROMA_PATH = BASE_DIR / "data" / "chroma_db"
-
-COLLECTION_NAME = "gdrive_documents"
-
-EMBEDDING_MODEL = "BAAI/bge-small-en-v1.5"
+from config import settings
 
 
 class VectorStore:
 
     def __init__(self):
 
-        self.client = chromadb.PersistentClient(
-            path=str(CHROMA_PATH)
-        )
+        if not settings.DATABASE_URL:
+            raise ValueError(
+                "DATABASE_URL is not configured."
+            )
 
         self.embedding_model = TextEmbedding(
-            model_name=EMBEDDING_MODEL
+            model_name=settings.EMBEDDING_MODEL
         )
 
-        self.collection = (
-            self.client.get_or_create_collection(
-                name=COLLECTION_NAME,
-                metadata={
-                    "hnsw:space": "cosine"
-                }
+        self.pool = ConnectionPool(
+            conninfo=settings.DATABASE_URL,
+            min_size=1,
+            max_size=10,
+            kwargs={
+                "row_factory": dict_row
+            },
+            open=True,
+        )
+
+    # ==================================================
+    # CLOSE
+    # ==================================================
+
+    def close(self):
+
+        if self.pool:
+            self.pool.close()
+
+    # ==================================================
+    # EMPTY RESULT
+    # ==================================================
+
+    @staticmethod
+    def _empty_results() -> dict:
+
+        return {
+            "ids": [[]],
+            "documents": [[]],
+            "metadatas": [[]],
+            "distances": [[]],
+        }
+
+    # ==================================================
+    # EMBEDDINGS
+    # ==================================================
+
+    def _embed_texts(
+        self,
+        texts: list[str],
+    ) -> list[list[float]]:
+
+        if not texts:
+            return []
+
+        embeddings = list(
+            self.embedding_model.embed(
+                texts
             )
+        )
+
+        return [
+            embedding.tolist()
+            for embedding in embeddings
+        ]
+
+    # ==================================================
+    # VECTOR LITERAL
+    # ==================================================
+
+    @staticmethod
+    def _vector_literal(
+        embedding: list[float],
+    ) -> str:
+
+        return (
+            "["
+            + ",".join(
+                str(float(value))
+                for value in embedding
+            )
+            + "]"
         )
 
     # ==================================================
@@ -42,100 +100,164 @@ class VectorStore:
         self,
         texts: list[str],
         metadatas: list[dict],
-        ids: list[str]
+        ids: list[str],
     ):
 
         if not texts:
             return
 
-        if len(texts) != len(metadatas):
+        if not (
+            len(texts)
+            == len(metadatas)
+            == len(ids)
+        ):
             raise ValueError(
-                "texts and metadatas length mismatch."
+                "texts, metadatas and ids "
+                "must have the same length."
             )
 
-        if len(texts) != len(ids):
-            raise ValueError(
-                "texts and ids length mismatch."
+        embeddings = self._embed_texts(
+            texts
+        )
+
+        rows = []
+
+        for index, text in enumerate(
+            texts
+        ):
+
+            metadata = (
+                metadatas[index]
+                or {}
             )
 
-        # Every chunk MUST be tenant scoped.
-        for metadata in metadatas:
+            # ------------------------------------------
+            # TENANT VALIDATION
+            # ------------------------------------------
 
-            if not metadata.get("user_id"):
+            user_id = metadata.get(
+                "user_id"
+            )
+
+            folder_id = metadata.get(
+                "folder_id"
+            )
+
+            file_id = metadata.get(
+                "file_id"
+            )
+
+            if not user_id:
                 raise ValueError(
                     "Every chunk must contain user_id."
                 )
 
-            if not metadata.get("folder_id"):
+            if not folder_id:
                 raise ValueError(
                     "Every chunk must contain folder_id."
                 )
 
-            if not metadata.get("file_id"):
+            if not file_id:
                 raise ValueError(
                     "Every chunk must contain file_id."
                 )
 
-        embeddings = list(
-            self.embedding_model.embed(
-                texts
-            )
-        )
-
-        embeddings = [
-            embedding.tolist()
-            for embedding in embeddings
-        ]
-
-        self.collection.upsert(
-            ids=ids,
-            documents=texts,
-            embeddings=embeddings,
-            metadatas=metadatas
-        )
-
-    # ==================================================
-    # BUILD TENANT FILTER
-    # ==================================================
-
-    def _build_filter(
-        self,
-        user_id: str,
-        folder_id: str | None = None,
-        file_id: str | None = None
-    ) -> dict:
-
-        if not user_id:
-            raise ValueError(
-                "user_id is required for Chroma access."
+            chunk_id = metadata.get(
+                "chunk_id",
+                index,
             )
 
-        filters = [
-            {
-                "user_id": user_id
-            }
-        ]
-
-        if folder_id:
-            filters.append(
-                {
-                    "folder_id": folder_id
-                }
+            rows.append(
+                (
+                    ids[index],
+                    user_id,
+                    folder_id,
+                    file_id,
+                    metadata.get(
+                        "file_name"
+                    ),
+                    metadata.get(
+                        "path"
+                    ),
+                    metadata.get(
+                        "mime_type"
+                    ),
+                    int(chunk_id),
+                    text,
+                    metadata.get(
+                        "modified_time"
+                    ),
+                    self._vector_literal(
+                        embeddings[index]
+                    ),
+                )
             )
 
-        if file_id:
-            filters.append(
-                {
-                    "file_id": file_id
-                }
+        sql = """
+            INSERT INTO public.document_chunks (
+                id,
+                user_id,
+                folder_id,
+                file_id,
+                file_name,
+                path,
+                mime_type,
+                chunk_id,
+                content,
+                modified_time,
+                embedding
             )
+            VALUES (
+                %s,
+                %s,
+                %s,
+                %s,
+                %s,
+                %s,
+                %s,
+                %s,
+                %s,
+                %s,
+                %s::extensions.vector
+            )
+            ON CONFLICT (id)
+            DO UPDATE SET
 
-        if len(filters) == 1:
-            return filters[0]
+                user_id = EXCLUDED.user_id,
 
-        return {
-            "$and": filters
-        }
+                folder_id = EXCLUDED.folder_id,
+
+                file_id = EXCLUDED.file_id,
+
+                file_name = EXCLUDED.file_name,
+
+                path = EXCLUDED.path,
+
+                mime_type = EXCLUDED.mime_type,
+
+                chunk_id = EXCLUDED.chunk_id,
+
+                content = EXCLUDED.content,
+
+                modified_time =
+                    EXCLUDED.modified_time,
+
+                embedding =
+                    EXCLUDED.embedding,
+
+                updated_at = now()
+        """
+
+        with self.pool.connection() as connection:
+
+            with connection.cursor() as cursor:
+
+                cursor.executemany(
+                    sql,
+                    rows,
+                )
+
+            connection.commit()
 
     # ==================================================
     # SEARCH
@@ -147,60 +269,29 @@ class VectorStore:
         top_k: int = 5,
         user_id: str | None = None,
         folder_id: str | None = None,
-        file_id: str | None = None
+        file_id: str | None = None,
     ):
 
         if not user_id:
+
             raise ValueError(
-                "user_id is required for Chroma search."
+                "user_id is required for "
+                "PostgreSQL vector search."
             )
 
         query = query.strip()
 
         if not query:
 
-            return {
-                "ids": [[]],
-                "documents": [[]],
-                "metadatas": [[]],
-                "distances": [[]]
-            }
+            return self._empty_results()
 
         if top_k <= 0:
+
             top_k = 5
 
-        where = self._build_filter(
-            user_id=user_id,
-            folder_id=folder_id,
-            file_id=file_id
-        )
-
-        # Only count records visible to this user.
-        scoped = self.collection.get(
-            where=where,
-            include=[]
-        )
-
-        scoped_count = len(
-            scoped.get(
-                "ids",
-                []
-            )
-        )
-
-        if scoped_count == 0:
-
-            return {
-                "ids": [[]],
-                "documents": [[]],
-                "metadatas": [[]],
-                "distances": [[]]
-            }
-
-        top_k = min(
-            top_k,
-            scoped_count
-        )
+        # ------------------------------------------
+        # Query embedding
+        # ------------------------------------------
 
         query_embedding = list(
             self.embedding_model.embed(
@@ -208,18 +299,156 @@ class VectorStore:
             )
         )[0]
 
-        return self.collection.query(
-            query_embeddings=[
-                query_embedding.tolist()
-            ],
-            n_results=top_k,
-            where=where,
-            include=[
-                "documents",
-                "metadatas",
-                "distances"
-            ]
+        vector = self._vector_literal(
+            query_embedding.tolist()
         )
+
+        # ------------------------------------------
+        # Tenant filters
+        # ------------------------------------------
+
+        conditions = [
+            "user_id = %s"
+        ]
+
+        filter_params = [
+            user_id
+        ]
+
+        if folder_id:
+
+            conditions.append(
+                "folder_id = %s"
+            )
+
+            filter_params.append(
+                folder_id
+            )
+
+        if file_id:
+
+            conditions.append(
+                "file_id = %s"
+            )
+
+            filter_params.append(
+                file_id
+            )
+
+        where_clause = " AND ".join(
+            conditions
+        )
+
+        sql = f"""
+            SELECT
+                id,
+                content,
+                file_id,
+                file_name,
+                path,
+                mime_type,
+                chunk_id,
+                user_id,
+                folder_id,
+                modified_time,
+
+                embedding <=> %s::extensions.vector
+                    AS distance
+
+            FROM public.document_chunks
+
+            WHERE {where_clause}
+
+            ORDER BY
+                embedding <=> %s::extensions.vector
+
+            LIMIT %s
+        """
+
+        parameters = [
+            vector,
+            *filter_params,
+            vector,
+            top_k,
+        ]
+
+        with self.pool.connection() as connection:
+
+            with connection.cursor() as cursor:
+
+                cursor.execute(
+                    sql,
+                    parameters,
+                )
+
+                rows = cursor.fetchall()
+
+        if not rows:
+
+            return self._empty_results()
+
+        ids = []
+        documents = []
+        metadatas = []
+        distances = []
+
+        for row in rows:
+
+            ids.append(
+                row["id"]
+            )
+
+            documents.append(
+                row["content"]
+            )
+
+            metadatas.append({
+                "file_name":
+                    row["file_name"],
+
+                "file_id":
+                    row["file_id"],
+
+                "folder_id":
+                    row["folder_id"],
+
+                "path":
+                    row["path"],
+
+                "mime_type":
+                    row["mime_type"],
+
+                "chunk_id":
+                    row["chunk_id"],
+
+                "user_id":
+                    row["user_id"],
+
+                "modified_time":
+                    row["modified_time"],
+            })
+
+            distances.append(
+                float(
+                    row["distance"]
+                )
+            )
+
+        return {
+            "ids": [ids],
+
+            "documents": [
+                documents
+            ],
+
+            "metadatas": [
+                metadatas
+            ],
+
+            "distances": [
+                distances
+            ],
+        }
 
     # ==================================================
     # COUNT
@@ -228,24 +457,56 @@ class VectorStore:
     def count(
         self,
         user_id: str,
-        folder_id: str | None = None
+        folder_id: str | None = None,
     ) -> int:
 
-        where = self._build_filter(
-            user_id=user_id,
-            folder_id=folder_id
-        )
+        if not user_id:
 
-        result = self.collection.get(
-            where=where,
-            include=[]
-        )
-
-        return len(
-            result.get(
-                "ids",
-                []
+            raise ValueError(
+                "user_id is required for count."
             )
+
+        conditions = [
+            "user_id = %s"
+        ]
+
+        parameters = [
+            user_id
+        ]
+
+        if folder_id:
+
+            conditions.append(
+                "folder_id = %s"
+            )
+
+            parameters.append(
+                folder_id
+            )
+
+        where_clause = " AND ".join(
+            conditions
+        )
+
+        sql = f"""
+            SELECT COUNT(*) AS total
+            FROM public.document_chunks
+            WHERE {where_clause}
+        """
+
+        with self.pool.connection() as connection:
+
+            with connection.cursor() as cursor:
+
+                cursor.execute(
+                    sql,
+                    parameters,
+                )
+
+                row = cursor.fetchone()
+
+        return int(
+            row["total"]
         )
 
     # ==================================================
@@ -256,38 +517,98 @@ class VectorStore:
         self,
         file_id: str,
         user_id: str,
-        folder_id: str
+        folder_id: str,
     ):
 
         if not user_id:
+
             raise ValueError(
                 "user_id is required."
             )
 
         if not folder_id:
+
             raise ValueError(
                 "folder_id is required."
             )
 
-        return self.collection.get(
-            where={
-                "$and": [
-                    {
-                        "file_id": file_id
-                    },
-                    {
-                        "user_id": user_id
-                    },
-                    {
-                        "folder_id": folder_id
-                    }
-                ]
-            },
-            include=[
-                "documents",
-                "metadatas"
-            ]
-        )
+        sql = """
+            SELECT
+                id,
+                content,
+                file_id,
+                file_name,
+                folder_id,
+                path,
+                mime_type,
+                chunk_id,
+                user_id,
+                modified_time
+
+            FROM public.document_chunks
+
+            WHERE user_id = %s
+              AND folder_id = %s
+              AND file_id = %s
+
+            ORDER BY chunk_id
+        """
+
+        with self.pool.connection() as connection:
+
+            with connection.cursor() as cursor:
+
+                cursor.execute(
+                    sql,
+                    (
+                        user_id,
+                        folder_id,
+                        file_id,
+                    ),
+                )
+
+                rows = cursor.fetchall()
+
+        return {
+            "ids": [
+                row["id"]
+                for row in rows
+            ],
+
+            "documents": [
+                row["content"]
+                for row in rows
+            ],
+
+            "metadatas": [
+                {
+                    "file_name":
+                        row["file_name"],
+
+                    "file_id":
+                        row["file_id"],
+
+                    "folder_id":
+                        row["folder_id"],
+
+                    "path":
+                        row["path"],
+
+                    "mime_type":
+                        row["mime_type"],
+
+                    "chunk_id":
+                        row["chunk_id"],
+
+                    "user_id":
+                        row["user_id"],
+
+                    "modified_time":
+                        row["modified_time"],
+                }
+                for row in rows
+            ],
+        }
 
     # ==================================================
     # CHECK FILE EXISTS
@@ -297,33 +618,37 @@ class VectorStore:
         self,
         file_id: str,
         user_id: str,
-        folder_id: str
+        folder_id: str,
     ) -> bool:
 
-        result = self.collection.get(
-            where={
-                "$and": [
-                    {
-                        "file_id": file_id
-                    },
-                    {
-                        "user_id": user_id
-                    },
-                    {
-                        "folder_id": folder_id
-                    }
-                ]
-            },
-            limit=1,
-            include=[]
-        )
+        sql = """
+            SELECT 1
+            FROM public.document_chunks
 
-        return bool(
-            result.get(
-                "ids",
-                []
-            )
-        )
+            WHERE user_id = %s
+              AND folder_id = %s
+              AND file_id = %s
+
+            LIMIT 1
+        """
+
+        with self.pool.connection() as connection:
+
+            with connection.cursor() as cursor:
+
+                cursor.execute(
+                    sql,
+                    (
+                        user_id,
+                        folder_id,
+                        file_id,
+                    ),
+                )
+
+                return (
+                    cursor.fetchone()
+                    is not None
+                )
 
     # ==================================================
     # GET FILE MODIFICATION TIME
@@ -333,40 +658,43 @@ class VectorStore:
         self,
         file_id: str,
         user_id: str,
-        folder_id: str
+        folder_id: str,
     ):
 
-        result = self.collection.get(
-            where={
-                "$and": [
-                    {
-                        "file_id": file_id
-                    },
-                    {
-                        "user_id": user_id
-                    },
-                    {
-                        "folder_id": folder_id
-                    }
-                ]
-            },
-            limit=1,
-            include=[
-                "metadatas"
-            ]
-        )
+        sql = """
+            SELECT modified_time
 
-        metadatas = result.get(
-            "metadatas",
-            []
-        )
+            FROM public.document_chunks
 
-        if not metadatas:
+            WHERE user_id = %s
+              AND folder_id = %s
+              AND file_id = %s
+
+            ORDER BY chunk_id
+
+            LIMIT 1
+        """
+
+        with self.pool.connection() as connection:
+
+            with connection.cursor() as cursor:
+
+                cursor.execute(
+                    sql,
+                    (
+                        user_id,
+                        folder_id,
+                        file_id,
+                    ),
+                )
+
+                row = cursor.fetchone()
+
+        if not row:
+
             return None
 
-        return metadatas[0].get(
-            "modified_time"
-        )
+        return row["modified_time"]
 
     # ==================================================
     # DELETE FILE
@@ -376,34 +704,43 @@ class VectorStore:
         self,
         file_id: str,
         user_id: str,
-        folder_id: str
+        folder_id: str,
     ):
 
         if not user_id:
+
             raise ValueError(
                 "user_id is required."
             )
 
         if not folder_id:
+
             raise ValueError(
                 "folder_id is required."
             )
 
-        self.collection.delete(
-            where={
-                "$and": [
-                    {
-                        "file_id": file_id
-                    },
-                    {
-                        "user_id": user_id
-                    },
-                    {
-                        "folder_id": folder_id
-                    }
-                ]
-            }
-        )
+        sql = """
+            DELETE FROM public.document_chunks
+
+            WHERE user_id = %s
+              AND folder_id = %s
+              AND file_id = %s
+        """
+
+        with self.pool.connection() as connection:
+
+            with connection.cursor() as cursor:
+
+                cursor.execute(
+                    sql,
+                    (
+                        user_id,
+                        folder_id,
+                        file_id,
+                    ),
+                )
+
+            connection.commit()
 
     # ==================================================
     # GET INDEXED FILES
@@ -412,61 +749,303 @@ class VectorStore:
     def get_indexed_files(
         self,
         user_id: str,
-        folder_id: str
-    ):
+        folder_id: str,
+    ) -> dict:
 
         if not user_id:
+
             raise ValueError(
                 "user_id is required for indexed files."
             )
 
         if not folder_id:
+
             raise ValueError(
                 "folder_id is required for indexed files."
             )
 
-        result = self.collection.get(
-            where={
-                "$and": [
-                    {
-                        "user_id": user_id
-                    },
-                    {
-                        "folder_id": folder_id
-                    }
-                ]
-            },
-            include=[
-                "metadatas"
-            ]
-        )
+        sql = """
+            SELECT DISTINCT ON (file_id)
+                file_id,
+                file_name,
+                modified_time,
+                path
+
+            FROM public.document_chunks
+
+            WHERE user_id = %s
+              AND folder_id = %s
+
+            ORDER BY
+                file_id,
+                chunk_id
+        """
+
+        with self.pool.connection() as connection:
+
+            with connection.cursor() as cursor:
+
+                cursor.execute(
+                    sql,
+                    (
+                        user_id,
+                        folder_id,
+                    ),
+                )
+
+                rows = cursor.fetchall()
 
         indexed_files = {}
 
-        for metadata in result.get(
-            "metadatas",
-            []
-        ):
+        for row in rows:
 
-            if not metadata:
-                continue
-
-            file_id = metadata.get(
-                "file_id"
-            )
-
-            if not file_id:
-                continue
-
-            indexed_files[file_id] = {
+            indexed_files[
+                row["file_id"]
+            ] = {
                 "file_name":
-                    metadata.get(
-                        "file_name"
-                    ),
+                    row["file_name"],
+
                 "modified_time":
-                    metadata.get(
-                        "modified_time"
-                    )
+                    row["modified_time"],
+
+                "path":
+                    row["path"],
             }
 
         return indexed_files
+
+    # ==================================================
+    # USER FILE COUNT
+    # ==================================================
+
+    def get_user_file_count(
+        self,
+        user_id: str,
+    ) -> int:
+
+        sql = """
+            SELECT COUNT(
+                DISTINCT file_id
+            ) AS total
+
+            FROM public.document_chunks
+
+            WHERE user_id = %s
+        """
+
+        with self.pool.connection() as connection:
+
+            with connection.cursor() as cursor:
+
+                cursor.execute(
+                    sql,
+                    (
+                        user_id,
+                    ),
+                )
+
+                row = cursor.fetchone()
+
+        return int(
+            row["total"]
+        )
+
+    # ==================================================
+    # USER CHUNK COUNT
+    # ==================================================
+
+    def get_user_chunk_count(
+        self,
+        user_id: str,
+    ) -> int:
+
+        return self.count(
+            user_id=user_id
+        )
+
+    # ==================================================
+    # DELETE SPECIFIC CHUNKS
+    # ==================================================
+
+    def delete_chunks(
+        self,
+        ids: list[str],
+        user_id: str,
+    ):
+
+        if not ids:
+
+            return
+
+        if not user_id:
+
+            raise ValueError(
+                "user_id is required."
+            )
+
+        sql = """
+            DELETE FROM public.document_chunks
+
+            WHERE user_id = %s
+              AND id = ANY(%s)
+        """
+
+        with self.pool.connection() as connection:
+
+            with connection.cursor() as cursor:
+
+                cursor.execute(
+                    sql,
+                    (
+                        user_id,
+                        ids,
+                    ),
+                )
+
+            connection.commit()
+
+    # ==================================================
+    # GET ADJACENT CHUNKS
+    # ==================================================
+
+    def get_adjacent_chunks(
+        self,
+        user_id: str,
+        file_id: str,
+        chunk_ids: list[int],
+        radius: int = 1,
+    ):
+
+        if not user_id:
+
+            raise ValueError(
+                "user_id is required."
+            )
+
+        if not file_id:
+
+            raise ValueError(
+                "file_id is required."
+            )
+
+        if not chunk_ids:
+
+            return {
+                "ids": [],
+                "documents": [],
+                "metadatas": [],
+            }
+
+        # ------------------------------------------
+        # Build target chunk IDs
+        # ------------------------------------------
+
+        targets = set()
+
+        for chunk_id in chunk_ids:
+
+            chunk_id = int(
+                chunk_id
+            )
+
+            for offset in range(
+                -radius,
+                radius + 1,
+            ):
+
+                target = (
+                    chunk_id
+                    + offset
+                )
+
+                if target >= 0:
+
+                    targets.add(
+                        target
+                    )
+
+        chunk_list = sorted(
+            targets
+        )
+
+        # ------------------------------------------
+        # Query same user's same file
+        # ------------------------------------------
+
+        sql = """
+            SELECT
+                id,
+                content,
+                file_id,
+                file_name,
+                folder_id,
+                path,
+                mime_type,
+                chunk_id,
+                user_id,
+                modified_time
+
+            FROM public.document_chunks
+
+            WHERE user_id = %s
+              AND file_id = %s
+              AND chunk_id = ANY(%s)
+
+            ORDER BY chunk_id
+        """
+
+        with self.pool.connection() as connection:
+
+            with connection.cursor() as cursor:
+
+                cursor.execute(
+                    sql,
+                    (
+                        user_id,
+                        file_id,
+                        chunk_list,
+                    ),
+                )
+
+                rows = cursor.fetchall()
+
+        return {
+            "ids": [
+                row["id"]
+                for row in rows
+            ],
+
+            "documents": [
+                row["content"]
+                for row in rows
+            ],
+
+            "metadatas": [
+                {
+                    "file_name":
+                        row["file_name"],
+
+                    "file_id":
+                        row["file_id"],
+
+                    "folder_id":
+                        row["folder_id"],
+
+                    "path":
+                        row["path"],
+
+                    "mime_type":
+                        row["mime_type"],
+
+                    "chunk_id":
+                        row["chunk_id"],
+
+                    "user_id":
+                        row["user_id"],
+
+                    "modified_time":
+                        row["modified_time"],
+                }
+                for row in rows
+            ],
+        }

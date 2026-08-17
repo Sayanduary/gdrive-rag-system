@@ -21,7 +21,8 @@ services:
     volumes:
       - ./backend/data:/app/data
     env_file:
-      - ./backend/.env
+      - path: ./backend/.env
+        required: false
     environment:
       - CHROMA_DB_PATH=/app/data/chroma_db
       - LM_STUDIO_BASE_URL=${LM_STUDIO_BASE_URL:-http://lmstudio:1234}

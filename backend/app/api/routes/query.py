@@ -10,12 +10,15 @@ from app.services.rag import RAGService
 
 router = APIRouter(
     prefix="/api",
-    tags=["RAG"]
+    tags=["RAG"],
 )
-
 
 memory = ConversationMemory()
 
+
+# ==================================================
+# REQUEST
+# ==================================================
 
 class QueryRequest(BaseModel):
 
@@ -23,12 +26,12 @@ class QueryRequest(BaseModel):
 
     top_k: int | None = Field(
         default=None,
-        gt=0
+        gt=0,
     )
 
     conversation_id: int | None = Field(
         default=None,
-        gt=0
+        gt=0,
     )
 
 
@@ -37,7 +40,7 @@ class QueryRequest(BaseModel):
 # ==================================================
 
 def get_user_id(
-    request: Request
+    request: Request,
 ) -> str:
 
     user = request.session.get(
@@ -48,7 +51,7 @@ def get_user_id(
 
         raise HTTPException(
             status_code=401,
-            detail="User is not authenticated."
+            detail="User is not authenticated.",
         )
 
     user_id = user.get(
@@ -59,54 +62,53 @@ def get_user_id(
 
         raise HTTPException(
             status_code=401,
-            detail="Google user ID is missing."
+            detail="Google user ID is missing.",
         )
 
     return user_id
 
 
 # ==================================================
-# RESOLVE CONVERSATION + FOLDER
+# RESOLVE CONVERSATION
 # ==================================================
 
 def resolve_conversation(
     request: Request,
     user_id: str,
     conversation_id: int | None,
-    question: str
+    question: str,
 ):
-
     # --------------------------------------------------
     # NEW CONVERSATION
     # --------------------------------------------------
 
     if conversation_id is None:
 
-        folder_id = request.session.get(
+        active_folder_id = request.session.get(
             "active_folder_id"
         )
 
-        if not folder_id:
+        if not active_folder_id:
 
             raise HTTPException(
                 status_code=400,
                 detail=(
                     "No Drive folder has been analyzed "
                     "for this session."
-                )
+                ),
             )
 
         conversation_id = (
             memory.create_conversation(
                 user_id=user_id,
-                folder_id=folder_id,
-                title=question[:60]
+                folder_id=active_folder_id,
+                title=question[:60],
             )
         )
 
         return (
             conversation_id,
-            folder_id
+            active_folder_id,
         )
 
     # --------------------------------------------------
@@ -115,18 +117,18 @@ def resolve_conversation(
 
     if not memory.conversation_belongs_to_user(
         conversation_id,
-        user_id
+        user_id,
     ):
 
         raise HTTPException(
             status_code=404,
-            detail="Conversation not found."
+            detail="Conversation not found.",
         )
 
     folder_id = (
         memory.get_conversation_folder(
             conversation_id,
-            user_id
+            user_id,
         )
     )
 
@@ -137,22 +139,22 @@ def resolve_conversation(
             detail=(
                 "This conversation is not associated "
                 "with a Drive folder."
-            )
+            ),
         )
 
     return (
         conversation_id,
-        folder_id
+        folder_id,
     )
 
 
 # ==================================================
-# SSE HELPER
+# SSE
 # ==================================================
 
 def make_sse_event(
     event_name: str,
-    payload: dict
+    payload: dict,
 ) -> str:
 
     return (
@@ -168,7 +170,7 @@ def make_sse_event(
 @router.post("/query")
 def query_documents(
     payload: QueryRequest,
-    request: Request
+    request: Request,
 ):
 
     user_id = get_user_id(
@@ -181,29 +183,27 @@ def query_documents(
 
         raise HTTPException(
             status_code=400,
-            detail="Question cannot be empty."
+            detail="Question cannot be empty.",
         )
 
     conversation_id, folder_id = (
         resolve_conversation(
             request=request,
             user_id=user_id,
-            conversation_id=(
-                payload.conversation_id
-            ),
-            question=question
+            conversation_id=payload.conversation_id,
+            question=question,
         )
     )
 
     try:
 
         # --------------------------------------------------
-        # Conversation history
+        # History
         # --------------------------------------------------
 
         history = memory.get_messages(
             conversation_id=conversation_id,
-            limit=20
+            limit=20,
         )
 
         # --------------------------------------------------
@@ -217,17 +217,23 @@ def query_documents(
             top_k=payload.top_k,
             history=history,
             user_id=user_id,
-            folder_id=folder_id
+
+            # IMPORTANT:
+            # Normal chat searches ALL files owned by
+            # this Google user. The active folder is
+            # conversation metadata, not a retrieval
+            # restriction.
+            folder_id=None,
         )
 
         answer = result.get(
             "answer",
-            ""
+            "",
         )
 
         sources = result.get(
             "sources",
-            []
+            [],
         )
 
         # --------------------------------------------------
@@ -237,7 +243,7 @@ def query_documents(
         memory.add_message(
             conversation_id=conversation_id,
             role="user",
-            content=question
+            content=question,
         )
 
         # --------------------------------------------------
@@ -248,24 +254,28 @@ def query_documents(
             conversation_id=conversation_id,
             role="assistant",
             content=answer,
-            sources=sources
+            sources=sources,
         )
 
-        # Keep session aligned with
-        # the conversation's folder.
         request.session[
             "active_folder_id"
         ] = folder_id
 
         return {
-            "conversation_id": conversation_id,
-            "folder_id": folder_id,
-            "answer": answer,
-            "sources": sources
+            "conversation_id":
+                conversation_id,
+
+            "folder_id":
+                folder_id,
+
+            "answer":
+                answer,
+
+            "sources":
+                sources,
         }
 
     except HTTPException:
-
         raise
 
     except Exception as error:
@@ -276,7 +286,7 @@ def query_documents(
 
         raise HTTPException(
             status_code=500,
-            detail=str(error)
+            detail=str(error),
         )
 
 
@@ -287,7 +297,7 @@ def query_documents(
 @router.post("/query/stream")
 def query_documents_stream(
     payload: QueryRequest,
-    request: Request
+    request: Request,
 ):
 
     user_id = get_user_id(
@@ -300,17 +310,15 @@ def query_documents_stream(
 
         raise HTTPException(
             status_code=400,
-            detail="Question cannot be empty."
+            detail="Question cannot be empty.",
         )
 
     conversation_id, folder_id = (
         resolve_conversation(
             request=request,
             user_id=user_id,
-            conversation_id=(
-                payload.conversation_id
-            ),
-            question=question
+            conversation_id=payload.conversation_id,
+            question=question,
         )
     )
 
@@ -322,7 +330,7 @@ def query_documents_stream(
 
         history = memory.get_messages(
             conversation_id=conversation_id,
-            limit=20
+            limit=20,
         )
 
         rag = RAGService()
@@ -333,7 +341,10 @@ def query_documents_stream(
                 history=history,
                 top_k=payload.top_k,
                 user_id=user_id,
-                folder_id=folder_id
+
+                # IMPORTANT:
+                # Search ALL files for this user.
+                folder_id=None,
             )
         )
 
@@ -341,66 +352,25 @@ def query_documents_stream(
             results
         )
 
-        # --------------------------------------------------
-        # Sources
-        # --------------------------------------------------
-
-        metadatas = results.get(
-            "metadatas",
-            [[]]
-        )[0]
-
-        distances = results.get(
-            "distances",
-            [[]]
-        )[0]
-
-        sources = []
-
-        for index, metadata in enumerate(
-            metadatas
-        ):
-
-            distance = None
-
-            if index < len(
-                distances
-            ):
-
-                distance = distances[
-                    index
-                ]
-
-            sources.append({
-                "file_name": metadata.get(
-                    "file_name"
-                ),
-                "file_id": metadata.get(
-                    "file_id"
-                ),
-                "chunk_id": metadata.get(
-                    "chunk_id"
-                ),
-                "path": metadata.get(
-                    "path"
-                ),
-                "distance": distance
-            })
+        # Use RAG's own source builder so normal and
+        # streaming endpoints return the same unique
+        # file-level source structure.
+        sources = rag.build_sources(
+            results
+        )
 
     except HTTPException:
-
         raise
 
     except Exception as error:
 
         print(
-            f"Streaming retrieval error: "
-            f"{error}"
+            f"Streaming retrieval error: {error}"
         )
 
         raise HTTPException(
             status_code=500,
-            detail=str(error)
+            detail=str(error),
         )
 
     # ==================================================
@@ -413,9 +383,9 @@ def query_documents_stream(
 
         try:
 
-            # ------------------------------------------
+            # --------------------------------------------------
             # Metadata
-            # ------------------------------------------
+            # --------------------------------------------------
 
             metadata_payload = {
                 "conversation_id":
@@ -425,37 +395,37 @@ def query_documents_stream(
                     folder_id,
 
                 "sources":
-                    sources
+                    sources,
             }
 
             yield make_sse_event(
                 "metadata",
-                metadata_payload
+                metadata_payload,
             )
 
-            # ------------------------------------------
-            # LM STUDIO STREAM
-            # ------------------------------------------
+            # --------------------------------------------------
+            # GROQ STREAM
+            # --------------------------------------------------
 
             for event in rag.stream_answer(
                 query=question,
                 context=context,
-                history=history
+                history=history,
             ):
 
                 event_type = event.get(
                     "type"
                 )
 
-                # ======================================
+                # ==========================================
                 # TOKEN
-                # ======================================
+                # ==========================================
 
                 if event_type == "token":
 
                     token = event.get(
                         "content",
-                        ""
+                        "",
                     )
 
                     if not token:
@@ -466,37 +436,38 @@ def query_documents_stream(
                     yield make_sse_event(
                         "token",
                         {
-                            "content": token
-                        }
+                            "content": token,
+                        },
                     )
 
-                # ======================================
+                # ==========================================
                 # ERROR
-                # ======================================
+                # ==========================================
 
                 elif event_type == "error":
 
                     yield make_sse_event(
                         "error",
                         {
-                            "message": event.get(
-                                "content",
-                                "Generation error."
-                            )
-                        }
+                            "message":
+                                event.get(
+                                    "content",
+                                    "Generation error.",
+                                ),
+                        },
                     )
 
                     return
 
-                # ======================================
+                # ==========================================
                 # DONE
-                # ======================================
+                # ==========================================
 
                 elif event_type == "done":
 
-                    # ----------------------------------
+                    # --------------------------------------
                     # Save user message
-                    # ----------------------------------
+                    # --------------------------------------
 
                     memory.add_message(
                         conversation_id=
@@ -505,12 +476,12 @@ def query_documents_stream(
                         role="user",
 
                         content=
-                            question
+                            question,
                     )
 
-                    # ----------------------------------
+                    # --------------------------------------
                     # Save assistant message
-                    # ----------------------------------
+                    # --------------------------------------
 
                     memory.add_message(
                         conversation_id=
@@ -522,7 +493,7 @@ def query_documents_stream(
                             full_answer,
 
                         sources=
-                            sources
+                            sources,
                     )
 
                     request.session[
@@ -536,8 +507,11 @@ def query_documents_stream(
                                 conversation_id,
 
                             "folder_id":
-                                folder_id
-                        }
+                                folder_id,
+
+                            "sources":
+                                sources,
+                        },
                     )
 
                     return
@@ -552,9 +526,14 @@ def query_documents_stream(
             yield make_sse_event(
                 "error",
                 {
-                    "message": str(error)
-                }
+                    "message":
+                        str(error),
+                },
             )
+
+    # ==================================================
+    # RESPONSE
+    # ==================================================
 
     return StreamingResponse(
         event_generator(),
@@ -573,6 +552,6 @@ def query_documents_stream(
                 "http://localhost:5173",
 
             "Access-Control-Allow-Credentials":
-                "true"
-        }
+                "true",
+        },
     )

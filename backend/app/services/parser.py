@@ -5,7 +5,7 @@ from PIL import Image
 from pptx import Presentation
 from pptx.enum.shapes import MSO_SHAPE_TYPE
 
-from app.services.lmstudio import LMStudioService
+from app.services.groq import GroqService
 
 
 SUPPORTED_IMAGE_TYPES = {
@@ -16,7 +16,7 @@ SUPPORTED_IMAGE_TYPES = {
 }
 
 
-lmstudio = LMStudioService()
+groq = GroqService()
 
 
 # ==================================================
@@ -79,7 +79,7 @@ def ocr_pdf_page(
 ) -> str:
 
     print(
-        f"Vision OCR: page "
+        f"Groq Vision OCR: page "
         f"{page_number}"
     )
 
@@ -87,7 +87,7 @@ def ocr_pdf_page(
         page
     )
 
-    text = lmstudio.ocr_image(
+    text = groq.ocr_image(
         image_bytes=image_bytes,
         mime_type="image/png"
     )
@@ -183,8 +183,8 @@ def extract_pdf_text(
                 f"{page_number}: {error}"
             )
 
-            # Do not lose existing PDF text
-            # if Vision OCR fails.
+            # Do not lose existing text
+            # if OCR fails.
             if text:
 
                 pages.append(
@@ -209,10 +209,10 @@ def extract_image_text(
 ) -> str:
 
     print(
-        "Using LM Studio Vision OCR..."
+        "Using Groq Vision OCR..."
     )
 
-    return lmstudio.ocr_image(
+    return groq.ocr_image(
         image_bytes=file_bytes,
         mime_type=mime_type
     ).strip()
@@ -291,10 +291,10 @@ def extract_pptx_shape_text(
 
             print(
                 "Processing PPTX image "
-                "with Vision..."
+                "with Groq Vision..."
             )
 
-            image_text = lmstudio.ocr_image(
+            image_text = groq.ocr_image(
                 image_bytes=image_bytes,
                 mime_type=mime_type
             )
@@ -344,8 +344,7 @@ def extract_pptx_text(
 
             slides.append(
                 f"SLIDE {slide_number}\n"
-                +
-                "\n".join(
+                + "\n".join(
                     slide_parts
                 )
             )

@@ -9,6 +9,10 @@ class Settings(BaseSettings):
 
     SESSION_SECRET: str = "change-me"
 
+    # ==================================================
+    # GOOGLE
+    # ==================================================
+
     GOOGLE_CLIENT_ID: str = ""
 
     GOOGLE_CLIENT_SECRET: str = ""
@@ -17,27 +21,61 @@ class Settings(BaseSettings):
         "http://localhost:8000/api/auth/google/callback"
     )
 
-    TOP_K: int = 8
-
     # ==================================================
-    # LM STUDIO
+    # RETRIEVAL
     # ==================================================
 
-    LM_STUDIO_BASE_URL: str = (
-        "http://localhost:1234"
+    TOP_K: int = 5
+
+    RETRIEVAL_CANDIDATES: int = 100
+
+    # ==================================================
+    # EMBEDDINGS
+    # ==================================================
+
+    EMBEDDING_MODEL: str = (
+        "BAAI/bge-small-en-v1.5"
     )
 
-    LM_STUDIO_MODEL: str = (
-        "llama-3.2-3b-instruct"
+    # ==================================================
+    # CHUNKING
+    # ==================================================
+
+    CHUNK_SIZE: int = 1000
+
+    CHUNK_OVERLAP: int = 150
+
+    # ==================================================
+    # POSTGRESQL / SUPABASE
+    # ==================================================
+
+    DATABASE_URL: str = ""
+
+    # ==================================================
+    # GROQ
+    # ==================================================
+
+    GROQ_API_KEY: str = ""
+
+    # Normal RAG / chat generation
+    GROQ_LLM_MODEL: str = (
+        "llama-3.1-8b-instant"
     )
 
-    LM_STUDIO_VISION_MODEL: str = (
-        "qwen2.5-vl-3b-instruct"
+    # Scanned PDF / image OCR
+    GROQ_VISION_MODEL: str = (
+        "qwen/qwen3.6-27b"
     )
+
+    # ==================================================
+    # PROVIDER
+    # ==================================================
+
+    LLM_PROVIDER: str = "groq"
 
     model_config = SettingsConfigDict(
         env_file=".env",
-        extra="ignore"
+        extra="ignore",
     )
 
 
