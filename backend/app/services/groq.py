@@ -5,8 +5,8 @@ from groq import Groq
 from config import settings
 
 
-FALLBACK_LLM_MODEL = "llama-3.3-70b-versatile"
-FALLBACK_VISION_MODEL = "llama-3.2-11b-vision-preview"
+FALLBACK_LLM_MODEL = "openai/gpt-oss-120b"
+FALLBACK_VISION_MODEL = "qwen/qwen3.6-27b"
 
 
 class GroqService:
@@ -22,19 +22,9 @@ class GroqService:
             api_key=settings.GROQ_API_KEY
         )
 
-        # Validate LLM model
-        raw_llm = settings.GROQ_LLM_MODEL.strip()
-        if not raw_llm or "gpt-oss" in raw_llm or "/" in raw_llm:
-            self.llm_model = FALLBACK_LLM_MODEL
-        else:
-            self.llm_model = raw_llm
-
-        # Validate Vision model for OCR
-        raw_vision = settings.GROQ_VISION_MODEL.strip()
-        if not raw_vision or "qwen" in raw_vision or "/" in raw_vision:
-            self.vision_model = FALLBACK_VISION_MODEL
-        else:
-            self.vision_model = raw_vision
+        # Set configured or fallback models
+        self.llm_model = settings.GROQ_LLM_MODEL.strip() or FALLBACK_LLM_MODEL
+        self.vision_model = settings.GROQ_VISION_MODEL.strip() or FALLBACK_VISION_MODEL
 
     # ==================================================
     # TEXT / RAG GENERATION
