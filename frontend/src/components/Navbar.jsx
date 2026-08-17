@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 import {
   FiBarChart2,
@@ -13,9 +14,6 @@ import api from "../services/api";
 
 function Navbar({
   user,
-  onDashboard,
-  onChat,
-  onSyncAnotherFolder,
   onHistory,
   showDashboard = false,
   showChat = false,
@@ -23,6 +21,8 @@ function Navbar({
   showHistory = false,
   activeTab = "",
 }) {
+  const navigate = useNavigate();
+
   const [open, setOpen] = useState(false);
 
   const menuRef = useRef(null);
@@ -36,7 +36,7 @@ function Navbar({
   const initial = displayName.charAt(0).toUpperCase();
 
   // ==================================================
-  // CLOSE DROPDOWN ON OUTSIDE CLICK
+  // CLOSE DROPDOWN
   // ==================================================
 
   useEffect(() => {
@@ -54,31 +54,26 @@ function Navbar({
   }, []);
 
   // ==================================================
-  // DASHBOARD
+  // NAVIGATION
   // ==================================================
 
-  function handleDashboard() {
+  function goDashboard() {
     setOpen(false);
+    navigate("/dashboard");
+  }
 
-    if (typeof onDashboard === "function") {
-      onDashboard();
-    }
+  function goChat() {
+    setOpen(false);
+    navigate("/chat");
+  }
+
+  function goAnalyze() {
+    setOpen(false);
+    navigate("/analyze");
   }
 
   // ==================================================
-  // CHAT
-  // ==================================================
-
-  function handleChat() {
-    setOpen(false);
-
-    if (typeof onChat === "function") {
-      onChat();
-    }
-  }
-
-  // ==================================================
-  // MOBILE CHAT HISTORY
+  // MOBILE HISTORY
   // ==================================================
 
   function handleHistory() {
@@ -86,18 +81,6 @@ function Navbar({
 
     if (typeof onHistory === "function") {
       onHistory();
-    }
-  }
-
-  // ==================================================
-  // SYNC ANOTHER FOLDER
-  // ==================================================
-
-  function handleSyncAnotherFolder() {
-    setOpen(false);
-
-    if (typeof onSyncAnotherFolder === "function") {
-      onSyncAnotherFolder();
     }
   }
 
@@ -113,24 +96,23 @@ function Navbar({
     } finally {
       localStorage.removeItem("gdrive_rag_session");
 
-      // Remove any old global key.
       localStorage.removeItem("gdrive_rag_active_conversation");
 
-      // Remove the current user's
-      // active conversation key.
       const userId = user?.sub || user?.email;
 
       if (userId) {
         localStorage.removeItem(`gdrive_rag_active_conversation_${userId}`);
       }
 
-      window.location.href = "/";
+      navigate("/login", {
+        replace: true,
+      });
     }
   }
 
-  const isDashboardActive = activeTab === "dashboard";
+  const dashboardActive = activeTab === "dashboard";
 
-  const isChatActive = activeTab === "chat";
+  const chatActive = activeTab === "chat";
 
   return (
     <header className="relative z-50 border-b border-white/[0.06] bg-[#0d0d0d]/90 backdrop-blur-xl">
@@ -140,7 +122,7 @@ function Navbar({
         ================================================== */}
 
         <div className="flex items-center gap-3">
-          {/* MOBILE CHAT HISTORY */}
+          {/* MOBILE HISTORY */}
 
           {showHistory && (
             <button
@@ -174,18 +156,13 @@ function Navbar({
           <button
             type="button"
             onClick={
-              showDashboard
-                ? handleDashboard
-                : showChat
-                  ? handleChat
-                  : undefined
+              showDashboard ? goDashboard : showChat ? goChat : undefined
             }
-            className={`
+            className="
               flex
               items-center
               gap-4
-              ${showDashboard || showChat ? "cursor-pointer" : "cursor-default"}
-            `}
+            "
           >
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/[0.12] bg-white/[0.04]">
               <FiFolder className="text-[20px] text-neutral-300" />
@@ -202,14 +179,12 @@ function Navbar({
         ================================================== */}
 
         <div className="flex items-center gap-2 sm:gap-3">
-          {/* ==================================================
-              DASHBOARD TAB
-          ================================================== */}
+          {/* DASHBOARD */}
 
           {showDashboard && (
             <button
               type="button"
-              onClick={handleDashboard}
+              onClick={goDashboard}
               className={`
                 flex
                 items-center
@@ -221,14 +196,12 @@ function Navbar({
                 text-xs
                 font-medium
                 transition-all
-                duration-200
                 ${
-                  isDashboardActive
+                  dashboardActive
                     ? `
-                      border-white/[0.13]
-                      bg-white/[0.08]
+                      border-white/[0.14]
+                      bg-white/[0.09]
                       text-white
-                      shadow-[0_0_20px_rgba(255,255,255,0.025)]
                     `
                     : `
                       border-white/[0.08]
@@ -247,14 +220,12 @@ function Navbar({
             </button>
           )}
 
-          {/* ==================================================
-              CHAT TAB
-          ================================================== */}
+          {/* CHAT */}
 
           {showChat && (
             <button
               type="button"
-              onClick={handleChat}
+              onClick={goChat}
               className={`
                 flex
                 items-center
@@ -266,12 +237,11 @@ function Navbar({
                 text-xs
                 font-medium
                 transition-all
-                duration-200
                 ${
-                  isChatActive
+                  chatActive
                     ? `
-                      border-white/[0.13]
-                      bg-white/[0.08]
+                      border-white/[0.14]
+                      bg-white/[0.09]
                       text-white
                     `
                     : `
@@ -291,14 +261,12 @@ function Navbar({
             </button>
           )}
 
-          {/* ==================================================
-              SYNC ANOTHER FOLDER
-          ================================================== */}
+          {/* SYNC */}
 
           {showSync && (
             <button
               type="button"
-              onClick={handleSyncAnotherFolder}
+              onClick={goAnalyze}
               className="
                 flex
                 items-center
@@ -326,9 +294,7 @@ function Navbar({
             </button>
           )}
 
-          {/* ==================================================
-              USER
-          ================================================== */}
+          {/* USER */}
 
           <div ref={menuRef} className="relative ml-1">
             <button
@@ -364,10 +330,6 @@ function Navbar({
               )}
             </button>
 
-            {/* ==================================================
-                USER DROPDOWN
-            ================================================== */}
-
             {open && (
               <div
                 className="
@@ -396,7 +358,7 @@ function Navbar({
                 {showDashboard && (
                   <button
                     type="button"
-                    onClick={handleDashboard}
+                    onClick={goDashboard}
                     className="
                       flex
                       w-full
@@ -413,7 +375,6 @@ function Navbar({
                     "
                   >
                     <FiBarChart2 />
-
                     <span>Dashboard</span>
                   </button>
                 )}
@@ -421,7 +382,7 @@ function Navbar({
                 {showChat && (
                   <button
                     type="button"
-                    onClick={handleChat}
+                    onClick={goChat}
                     className="
                       flex
                       w-full
@@ -438,7 +399,6 @@ function Navbar({
                     "
                   >
                     <FiMessageSquare />
-
                     <span>Chat</span>
                   </button>
                 )}
@@ -446,7 +406,7 @@ function Navbar({
                 {showSync && (
                   <button
                     type="button"
-                    onClick={handleSyncAnotherFolder}
+                    onClick={goAnalyze}
                     className="
                       flex
                       w-full
@@ -463,7 +423,6 @@ function Navbar({
                     "
                   >
                     <FiRefreshCw />
-
                     <span>Sync another folder</span>
                   </button>
                 )}
@@ -489,7 +448,6 @@ function Navbar({
                   "
                 >
                   <FiLogOut />
-
                   <span>Logout</span>
                 </button>
               </div>
