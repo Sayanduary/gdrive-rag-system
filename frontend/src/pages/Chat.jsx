@@ -43,7 +43,6 @@ function Chat({ user, onSyncAnotherFolder }) {
   const [loadingConversations, setLoadingConversations] = useState(true);
   const [error, setError] = useState("");
 
-  // Mobile sidebar
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
   // ==================================================
@@ -135,14 +134,16 @@ function Chat({ user, onSyncAnotherFolder }) {
         if (items.length === 0) {
           setActiveConversationId(null);
           setMessages([]);
+
           localStorage.removeItem(ACTIVE_CHAT_KEY);
+
           return;
         }
 
         const savedId = localStorage.getItem(ACTIVE_CHAT_KEY);
 
         const savedConversation = items.find(
-          (item) => String(item.id) === savedId
+          (item) => String(item.id) === savedId,
         );
 
         const conversationToOpen = savedConversation || items[0];
@@ -151,8 +152,7 @@ function Chat({ user, onSyncAnotherFolder }) {
       } catch (error) {
         if (!ignore) {
           setError(
-            error.response?.data?.detail ||
-            "Failed to load conversations."
+            error.response?.data?.detail || "Failed to load conversations.",
           );
         }
       } finally {
@@ -181,23 +181,15 @@ function Chat({ user, onSyncAnotherFolder }) {
     try {
       setError("");
 
-      const response = await api.get(
-        `/api/conversations/${conversationId}`
-      );
+      const response = await api.get(`/api/conversations/${conversationId}`);
 
       setMessages(response.data.messages || []);
 
       setActiveConversationId(conversationId);
 
-      localStorage.setItem(
-        ACTIVE_CHAT_KEY,
-        String(conversationId)
-      );
+      localStorage.setItem(ACTIVE_CHAT_KEY, String(conversationId));
     } catch (error) {
-      setError(
-        error.response?.data?.detail ||
-        "Failed to load conversation."
-      );
+      setError(error.response?.data?.detail || "Failed to load conversation.");
     }
   }
 
@@ -229,25 +221,18 @@ function Chat({ user, onSyncAnotherFolder }) {
         updated_at: now,
       };
 
-      setConversations((previous) => [
-        newConversation,
-        ...previous,
-      ]);
+      setConversations((previous) => [newConversation, ...previous]);
 
       setActiveConversationId(conversationId);
 
-      localStorage.setItem(
-        ACTIVE_CHAT_KEY,
-        String(conversationId)
-      );
+      localStorage.setItem(ACTIVE_CHAT_KEY, String(conversationId));
 
       setMessages([]);
       setQuestion("");
       setError("");
     } catch (error) {
       setError(
-        error.response?.data?.detail ||
-        "Failed to create conversation."
+        error.response?.data?.detail || "Failed to create conversation.",
       );
     }
   }
@@ -282,10 +267,7 @@ function Chat({ user, onSyncAnotherFolder }) {
         title,
       });
     } catch (error) {
-      console.error(
-        "Failed to update conversation title:",
-        error
-      );
+      console.error("Failed to update conversation title:", error);
     }
   }
 
@@ -301,12 +283,10 @@ function Chat({ user, onSyncAnotherFolder }) {
     try {
       setError("");
 
-      await api.delete(
-        `/api/conversations/${conversationId}`
-      );
+      await api.delete(`/api/conversations/${conversationId}`);
 
       const remaining = conversations.filter(
-        (conversation) => conversation.id !== conversationId
+        (conversation) => conversation.id !== conversationId,
       );
 
       setConversations(remaining);
@@ -323,8 +303,7 @@ function Chat({ user, onSyncAnotherFolder }) {
       }
     } catch (error) {
       setError(
-        error.response?.data?.detail ||
-        "Failed to delete conversation."
+        error.response?.data?.detail || "Failed to delete conversation.",
       );
     }
   }
@@ -338,10 +317,7 @@ function Chat({ user, onSyncAnotherFolder }) {
       return;
     }
 
-    const title = window.prompt(
-      "Conversation title:",
-      conversation.title
-    );
+    const title = window.prompt("Conversation title:", conversation.title);
 
     if (title === null || !title.trim()) {
       return;
@@ -350,27 +326,23 @@ function Chat({ user, onSyncAnotherFolder }) {
     try {
       const newTitle = title.trim();
 
-      await api.patch(
-        `/api/conversations/${conversation.id}`,
-        {
-          title: newTitle,
-        }
-      );
+      await api.patch(`/api/conversations/${conversation.id}`, {
+        title: newTitle,
+      });
 
       setConversations((previous) =>
         previous.map((item) =>
           item.id === conversation.id
             ? {
-              ...item,
-              title: newTitle,
-            }
-            : item
-        )
+                ...item,
+                title: newTitle,
+              }
+            : item,
+        ),
       );
     } catch (error) {
       setError(
-        error.response?.data?.detail ||
-        "Failed to rename conversation."
+        error.response?.data?.detail || "Failed to rename conversation.",
       );
     }
   }
@@ -445,44 +417,24 @@ function Chat({ user, onSyncAnotherFolder }) {
 
     pendingSourcesRef.current = [];
 
-    // ----------------------------------------------
-    // Determine whether this is the first message
-    // ----------------------------------------------
-
     const isFirstMessage = messages.length === 0;
 
-    // ----------------------------------------------
-    // Automatically generate title
-    // ----------------------------------------------
-
-    const generatedTitle =
-      generateChatTitle(currentQuestion);
-
-    // ----------------------------------------------
-    // Update sidebar immediately
-    // ----------------------------------------------
+    const generatedTitle = generateChatTitle(currentQuestion);
 
     if (isFirstMessage && activeConversationId) {
       setConversations((previous) =>
         previous.map((conversation) =>
           conversation.id === activeConversationId
             ? {
-              ...conversation,
-              title: generatedTitle,
-            }
-            : conversation
-        )
+                ...conversation,
+                title: generatedTitle,
+              }
+            : conversation,
+        ),
       );
 
-      updateChatTitle(
-        activeConversationId,
-        generatedTitle
-      );
+      updateChatTitle(activeConversationId, generatedTitle);
     }
-
-    // ----------------------------------------------
-    // Add user + assistant placeholder
-    // ----------------------------------------------
 
     setMessages((previous) => [
       ...previous,
@@ -500,17 +452,9 @@ function Chat({ user, onSyncAnotherFolder }) {
       },
     ]);
 
-    // ----------------------------------------------
-    // Clear composer
-    // ----------------------------------------------
-
     setQuestion("");
 
     try {
-      // ----------------------------------------------
-      // Vercel same-origin API
-      // ----------------------------------------------
-
       const response = await fetch("/api/query/stream", {
         method: "POST",
 
@@ -527,10 +471,6 @@ function Chat({ user, onSyncAnotherFolder }) {
         }),
       });
 
-      // ------------------------------------------
-      // HTTP ERROR
-      // ------------------------------------------
-
       if (!response.ok) {
         let detail = "Failed to generate an answer.";
 
@@ -545,14 +485,8 @@ function Chat({ user, onSyncAnotherFolder }) {
         throw new Error(detail);
       }
 
-      // ------------------------------------------
-      // STREAMING BODY
-      // ------------------------------------------
-
       if (!response.body) {
-        throw new Error(
-          "Streaming response is unavailable."
-        );
+        throw new Error("Streaming response is unavailable.");
       }
 
       const reader = response.body.getReader();
@@ -560,10 +494,6 @@ function Chat({ user, onSyncAnotherFolder }) {
       const decoder = new TextDecoder();
 
       let buffer = "";
-
-      // ------------------------------------------
-      // READ STREAM
-      // ------------------------------------------
 
       while (true) {
         const { value, done } = await reader.read();
@@ -589,54 +519,39 @@ function Chat({ user, onSyncAnotherFolder }) {
 
           const { eventName, data } = parsed;
 
-          // ==========================================
           // METADATA
-          // ==========================================
 
           if (eventName === "metadata") {
-            const conversationId =
-              data.conversation_id;
+            const conversationId = data.conversation_id;
 
             if (conversationId) {
               setActiveConversationId(conversationId);
 
-              localStorage.setItem(
-                ACTIVE_CHAT_KEY,
-                String(conversationId)
-              );
-
-              // If backend created the conversation
-              // during request, update title there.
+              localStorage.setItem(ACTIVE_CHAT_KEY, String(conversationId));
 
               if (isFirstMessage && conversationId) {
                 setConversations((previous) =>
                   previous.map((conversation) =>
                     conversation.id === conversationId
                       ? {
-                        ...conversation,
-                        id: conversationId,
-                        title: generatedTitle,
-                      }
-                      : conversation
-                  )
+                          ...conversation,
+                          id: conversationId,
+                          title: generatedTitle,
+                        }
+                      : conversation,
+                  ),
                 );
 
-                updateChatTitle(
-                  conversationId,
-                  generatedTitle
-                );
+                updateChatTitle(conversationId, generatedTitle);
               }
             }
 
-            pendingSourcesRef.current =
-              data.sources || [];
+            pendingSourcesRef.current = data.sources || [];
 
             continue;
           }
 
-          // ==========================================
           // TOKEN
-          // ==========================================
 
           if (eventName === "token") {
             const token = data.content || "";
@@ -657,9 +572,7 @@ function Chat({ user, onSyncAnotherFolder }) {
               updated[lastIndex] = {
                 ...updated[lastIndex],
 
-                content:
-                  (updated[lastIndex].content || "") +
-                  token,
+                content: (updated[lastIndex].content || "") + token,
               };
 
               return updated;
@@ -668,25 +581,18 @@ function Chat({ user, onSyncAnotherFolder }) {
             continue;
           }
 
-          // ==========================================
           // ERROR
-          // ==========================================
 
           if (eventName === "error") {
             throw new Error(
-              data.message ||
-              data.content ||
-              "Generation failed."
+              data.message || data.content || "Generation failed.",
             );
           }
 
-          // ==========================================
           // DONE
-          // ==========================================
 
           if (eventName === "done") {
-            const finalSources =
-              pendingSourcesRef.current || [];
+            const finalSources = pendingSourcesRef.current || [];
 
             setMessages((previous) => {
               if (previous.length === 0) {
@@ -712,18 +618,11 @@ function Chat({ user, onSyncAnotherFolder }) {
         }
       }
     } catch (error) {
-      // Remove optimistic user + assistant messages.
-
-      setMessages((previous) =>
-        previous.slice(0, -2)
-      );
+      setMessages((previous) => previous.slice(0, -2));
 
       pendingSourcesRef.current = [];
 
-      setError(
-        error.message ||
-        "Failed to generate an answer."
-      );
+      setError(error.message || "Failed to generate an answer.");
     } finally {
       requestInFlightRef.current = false;
 
@@ -736,10 +635,7 @@ function Chat({ user, onSyncAnotherFolder }) {
   // ==================================================
 
   function handleKeyDown(event) {
-    if (
-      event.key === "Enter" &&
-      !event.shiftKey
-    ) {
+    if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
 
       askQuestion();
@@ -751,14 +647,10 @@ function Chat({ user, onSyncAnotherFolder }) {
   // ==================================================
 
   function handleSyncAnotherFolder() {
-    if (
-      typeof onSyncAnotherFolder === "function"
-    ) {
+    if (typeof onSyncAnotherFolder === "function") {
       onSyncAnotherFolder();
     } else {
-      localStorage.removeItem(
-        "gdrive_rag_session"
-      );
+      localStorage.removeItem("gdrive_rag_session");
     }
 
     navigate("/analyze");
@@ -768,9 +660,7 @@ function Chat({ user, onSyncAnotherFolder }) {
   // MOBILE: OPEN CONVERSATION
   // ==================================================
 
-  async function handleMobileConversation(
-    conversationId
-  ) {
+  async function handleMobileConversation(conversationId) {
     await loadConversation(conversationId);
 
     setMobileSidebarOpen(false);
@@ -791,13 +681,13 @@ function Chat({ user, onSyncAnotherFolder }) {
   // ==================================================
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-[#0d0d0d] text-white">
+    <div className="relative min-h-screen overflow-hidden bg-[#090909] text-white selection:bg-white/10 selection:text-white">
       {/* ==================================================
-          BACKGROUND GRID
+          BACKGROUND
       ================================================== */}
 
       <div
-        className="pointer-events-none fixed inset-0 opacity-[0.035]"
+        className="pointer-events-none fixed inset-0 opacity-[0.028]"
         style={{
           backgroundImage: `
             linear-gradient(
@@ -810,11 +700,13 @@ function Chat({ user, onSyncAnotherFolder }) {
               transparent 1px
             )
           `,
-          backgroundSize: "50px 50px",
+          backgroundSize: "48px 48px",
         }}
       />
 
-      <div className="pointer-events-none fixed left-1/2 top-[-400px] h-[700px] w-[700px] -translate-x-1/2 rounded-full bg-white/[0.025] blur-3xl" />
+      <div className="pointer-events-none fixed left-1/2 top-[-420px] h-[760px] w-[760px] -translate-x-1/2 rounded-full bg-white/[0.025] blur-[130px]" />
+
+      <div className="pointer-events-none fixed bottom-[-350px] left-[15%] h-[550px] w-[550px] rounded-full bg-white/[0.012] blur-[130px]" />
 
       {/* ==================================================
           NAVBAR
@@ -832,107 +724,139 @@ function Chat({ user, onSyncAnotherFolder }) {
           APP LAYOUT
       ================================================== */}
 
-      <div className="relative flex h-[calc(100dvh-84px)] overflow-hidden">
+      <div className="relative flex h-[calc(100dvh-84px)] overflow-hidden bg-[#090909]">
         {/* ==================================================
             DESKTOP SIDEBAR
         ================================================== */}
 
-        <aside className="hidden w-72 shrink-0 border-r border-white/[0.06] bg-[#101010]/80 backdrop-blur-xl lg:flex lg:flex-col">
-          {/* Header */}
+        <aside className="hidden w-[280px] shrink-0 border-r border-white/[0.06] bg-[#0d0d0d]/90 backdrop-blur-2xl lg:flex lg:flex-col">
+          {/* Sidebar Header */}
 
-          <div className="flex items-center justify-between border-b border-white/[0.06] p-4">
-            <p className="text-sm font-medium text-neutral-300">
-              Conversations
-            </p>
+          <div className="border-b border-white/[0.06] p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-neutral-200">
+                  Conversations
+                </p>
 
-            <button
-              type="button"
-              onClick={createNewChat}
-              disabled={loading}
-              className="
-                flex
-                h-8
-                w-8
-                items-center
-                justify-center
-                rounded-lg
-                border
-                border-white/[0.08]
-                bg-white/[0.04]
-                text-neutral-400
-                transition
-                hover:bg-white/[0.08]
-                hover:text-white
-                disabled:cursor-not-allowed
-                disabled:opacity-50
-              "
-              title="New chat"
-            >
-              <FiPlus />
-            </button>
+                <p className="mt-1 text-[10px] text-neutral-600">
+                  Your chat history
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={createNewChat}
+                disabled={loading}
+                className="
+                  flex
+                  h-9
+                  w-9
+                  items-center
+                  justify-center
+                  rounded-xl
+                  border
+                  border-white/[0.08]
+                  bg-white/[0.035]
+                  text-neutral-500
+                  transition-all
+                  duration-200
+                  hover:border-white/[0.14]
+                  hover:bg-white/[0.07]
+                  hover:text-white
+                  disabled:cursor-not-allowed
+                  disabled:opacity-50
+                "
+                title="New chat"
+              >
+                <FiPlus className="text-sm" />
+              </button>
+            </div>
           </div>
 
           {/* Conversation List */}
 
-          <div className="flex-1 overflow-y-auto p-3">
+          <div className="chat-sidebar-scrollbar flex-1 overflow-y-auto p-3">
             {loadingConversations ? (
-              <div className="px-2 py-4 text-xs text-neutral-600">
+              <div className="rounded-xl border border-white/[0.05] bg-white/[0.015] px-3 py-4 text-xs text-neutral-600">
                 Loading conversations...
               </div>
             ) : conversations.length === 0 ? (
-              <div className="px-2 py-4 text-xs leading-5 text-neutral-600">
-                No conversations yet. Start your first
-                chat.
+              <div className="rounded-xl border border-dashed border-white/[0.06] bg-white/[0.012] px-3 py-5 text-xs leading-5 text-neutral-600">
+                No conversations yet. Start your first chat.
               </div>
             ) : (
-              <div className="space-y-1">
+              <div className="space-y-1.5">
                 {conversations.map((conversation) => {
                   const active =
-                    String(activeConversationId) ===
-                    String(conversation.id);
+                    String(activeConversationId) === String(conversation.id);
 
                   return (
                     <div
                       key={conversation.id}
                       className={`
-                        group
-                        flex
-                        items-center
-                        gap-1
-                        rounded-xl
-                        border
-                        transition
-                        ${active
-                          ? "border-white/[0.09] bg-white/[0.06]"
-                          : "border-transparent hover:bg-white/[0.035]"
-                        }
-                      `}
+                          group
+                          flex
+                          items-center
+                          gap-1
+                          rounded-xl
+                          border
+                          transition-all
+                          duration-200
+                          ${
+                            active
+                              ? "border-white/[0.11] bg-white/[0.065] shadow-lg shadow-black/20"
+                              : "border-transparent hover:border-white/[0.06] hover:bg-white/[0.035]"
+                          }
+                        `}
                     >
                       {/* Conversation */}
 
                       <button
                         type="button"
-                        onClick={() =>
-                          loadConversation(
-                            conversation.id
-                          )
-                        }
+                        onClick={() => loadConversation(conversation.id)}
                         disabled={loading}
                         className="
-                          min-w-0
-                          flex-1
-                          px-3
-                          py-2.5
-                          text-left
-                          disabled:opacity-50
-                        "
+                            min-w-0
+                            flex-1
+                            px-3
+                            py-3
+                            text-left
+                            disabled:opacity-50
+                          "
                       >
-                        <div className="flex items-center gap-2">
-                          <FiMessageSquare className="shrink-0 text-xs text-neutral-600" />
+                        <div className="flex items-center gap-2.5">
+                          <div
+                            className={`
+                                flex
+                                h-7
+                                w-7
+                                shrink-0
+                                items-center
+                                justify-center
+                                rounded-lg
+                                border
+                                ${
+                                  active
+                                    ? "border-white/[0.10] bg-white/[0.07]"
+                                    : "border-white/[0.05] bg-white/[0.025]"
+                                }
+                              `}
+                          >
+                            <FiMessageSquare
+                              className={`
+                                  text-[11px]
+                                  ${
+                                    active
+                                      ? "text-neutral-300"
+                                      : "text-neutral-600"
+                                  }
+                                `}
+                            />
+                          </div>
 
                           <span className="truncate text-xs text-neutral-300">
-                            {conversation.title ||
-                              "New Chat"}
+                            {conversation.title || "New Chat"}
                           </span>
                         </div>
                       </button>
@@ -941,26 +865,22 @@ function Chat({ user, onSyncAnotherFolder }) {
 
                       <button
                         type="button"
-                        onClick={() =>
-                          renameConversation(
-                            conversation
-                          )
-                        }
+                        onClick={() => renameConversation(conversation)}
                         disabled={loading}
                         className="
-                          hidden
-                          h-7
-                          w-7
-                          items-center
-                          justify-center
-                          rounded-lg
-                          text-neutral-700
-                          transition
-                          hover:bg-white/[0.06]
-                          hover:text-neutral-300
-                          group-hover:flex
-                          disabled:opacity-50
-                        "
+                            hidden
+                            h-7
+                            w-7
+                            items-center
+                            justify-center
+                            rounded-lg
+                            text-neutral-700
+                            transition
+                            hover:bg-white/[0.06]
+                            hover:text-neutral-300
+                            group-hover:flex
+                            disabled:opacity-50
+                          "
                         title="Rename"
                       >
                         <FiEdit2 className="text-xs" />
@@ -970,27 +890,23 @@ function Chat({ user, onSyncAnotherFolder }) {
 
                       <button
                         type="button"
-                        onClick={() =>
-                          deleteConversation(
-                            conversation.id
-                          )
-                        }
+                        onClick={() => deleteConversation(conversation.id)}
                         disabled={loading}
                         className="
-                          mr-1
-                          hidden
-                          h-7
-                          w-7
-                          items-center
-                          justify-center
-                          rounded-lg
-                          text-neutral-700
-                          transition
-                          hover:bg-red-500/[0.08]
-                          hover:text-red-400
-                          group-hover:flex
-                          disabled:opacity-50
-                        "
+                            mr-1
+                            hidden
+                            h-7
+                            w-7
+                            items-center
+                            justify-center
+                            rounded-lg
+                            text-neutral-700
+                            transition
+                            hover:bg-red-500/[0.08]
+                            hover:text-red-400
+                            group-hover:flex
+                            disabled:opacity-50
+                          "
                         title="Delete"
                       >
                         <FiTrash2 className="text-xs" />
@@ -1018,13 +934,16 @@ function Chat({ user, onSyncAnotherFolder }) {
                 rounded-xl
                 border
                 border-white/[0.07]
-                bg-white/[0.03]
+                bg-white/[0.025]
                 px-3
                 py-2.5
                 text-xs
+                font-medium
                 text-neutral-400
-                transition
-                hover:bg-white/[0.06]
+                transition-all
+                duration-200
+                hover:border-white/[0.12]
+                hover:bg-white/[0.05]
                 hover:text-white
                 disabled:opacity-50
               "
@@ -1036,29 +955,27 @@ function Chat({ user, onSyncAnotherFolder }) {
         </aside>
 
         {/* ==================================================
-            MOBILE CHAT HISTORY DRAWER
+            MOBILE CHAT HISTORY
         ================================================== */}
 
         {mobileSidebarOpen && (
           <div className="fixed inset-x-0 bottom-0 top-[84px] z-[60] lg:hidden">
-            {/* BACKDROP */}
+            {/* Backdrop */}
 
             <button
               type="button"
               aria-label="Close chat history"
-              onClick={() =>
-                setMobileSidebarOpen(false)
-              }
+              onClick={() => setMobileSidebarOpen(false)}
               className="
                 absolute
                 inset-0
                 cursor-default
-                bg-black/60
-                backdrop-blur-[2px]
+                bg-black/65
+                backdrop-blur-[3px]
               "
             />
 
-            {/* DRAWER */}
+            {/* Drawer */}
 
             <aside
               className="
@@ -1069,38 +986,36 @@ function Chat({ user, onSyncAnotherFolder }) {
                 flex-col
                 border-r
                 border-white/[0.08]
-                bg-[#101010]
+                bg-[#0d0d0d]
                 shadow-2xl
               "
             >
               {/* Drawer Header */}
 
-              <div className="flex items-center justify-between border-b border-white/[0.06] p-4">
+              <div className="flex items-center justify-between border-b border-white/[0.06] bg-white/[0.015] p-4">
                 <div>
                   <p className="text-sm font-medium text-neutral-200">
                     Conversations
                   </p>
 
-                  <p className="mt-0.5 text-[10px] text-neutral-600">
+                  <p className="mt-1 text-[10px] text-neutral-600">
                     Chat history
                   </p>
                 </div>
 
                 <button
                   type="button"
-                  onClick={() =>
-                    setMobileSidebarOpen(false)
-                  }
+                  onClick={() => setMobileSidebarOpen(false)}
                   className="
                     flex
                     h-8
                     w-8
                     items-center
                     justify-center
-                    rounded-lg
+                    rounded-xl
                     border
                     border-white/[0.08]
-                    bg-white/[0.04]
+                    bg-white/[0.035]
                     text-neutral-500
                     transition
                     hover:bg-white/[0.08]
@@ -1148,54 +1063,48 @@ function Chat({ user, onSyncAnotherFolder }) {
 
               {/* Mobile Conversation List */}
 
-              <div className="flex-1 overflow-y-auto p-3">
+              <div className="chat-sidebar-scrollbar flex-1 overflow-y-auto p-3">
                 {loadingConversations ? (
                   <div className="px-2 py-4 text-xs text-neutral-600">
                     Loading conversations...
                   </div>
                 ) : conversations.length === 0 ? (
-                  <div className="px-2 py-4 text-xs leading-5 text-neutral-600">
-                    No conversations yet. Start your
-                    first chat.
+                  <div className="rounded-xl border border-dashed border-white/[0.06] bg-white/[0.012] px-3 py-5 text-xs leading-5 text-neutral-600">
+                    No conversations yet. Start your first chat.
                   </div>
                 ) : (
-                  <div className="space-y-1">
-                    {conversations.map(
-                      (conversation) => {
-                        const active =
-                          String(
-                            activeConversationId
-                          ) ===
-                          String(conversation.id);
+                  <div className="space-y-1.5">
+                    {conversations.map((conversation) => {
+                      const active =
+                        String(activeConversationId) ===
+                        String(conversation.id);
 
-                        return (
-                          <div
-                            key={conversation.id}
-                            className={`
+                      return (
+                        <div
+                          key={conversation.id}
+                          className={`
                               group
                               flex
                               items-center
                               gap-1
                               rounded-xl
                               border
-                              transition
-                              ${active
-                                ? "border-white/[0.09] bg-white/[0.06]"
-                                : "border-transparent hover:bg-white/[0.035]"
+                              transition-all
+                              duration-200
+                              ${
+                                active
+                                  ? "border-white/[0.11] bg-white/[0.065]"
+                                  : "border-transparent hover:border-white/[0.06] hover:bg-white/[0.035]"
                               }
                             `}
-                          >
-                            {/* Conversation */}
-
-                            <button
-                              type="button"
-                              onClick={() =>
-                                handleMobileConversation(
-                                  conversation.id
-                                )
-                              }
-                              disabled={loading}
-                              className="
+                        >
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleMobileConversation(conversation.id)
+                            }
+                            disabled={loading}
+                            className="
                                 min-w-0
                                 flex-1
                                 px-3
@@ -1203,28 +1112,23 @@ function Chat({ user, onSyncAnotherFolder }) {
                                 text-left
                                 disabled:opacity-50
                               "
-                            >
-                              <div className="flex items-center gap-2">
-                                <FiMessageSquare className="shrink-0 text-xs text-neutral-600" />
-
-                                <span className="truncate text-xs text-neutral-300">
-                                  {conversation.title ||
-                                    "New Chat"}
-                                </span>
+                          >
+                            <div className="flex items-center gap-2.5">
+                              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-white/[0.06] bg-white/[0.025]">
+                                <FiMessageSquare className="text-[11px] text-neutral-600" />
                               </div>
-                            </button>
 
-                            {/* Rename */}
+                              <span className="truncate text-xs text-neutral-300">
+                                {conversation.title || "New Chat"}
+                              </span>
+                            </div>
+                          </button>
 
-                            <button
-                              type="button"
-                              onClick={() =>
-                                renameConversation(
-                                  conversation
-                                )
-                              }
-                              disabled={loading}
-                              className="
+                          <button
+                            type="button"
+                            onClick={() => renameConversation(conversation)}
+                            disabled={loading}
+                            className="
                                 flex
                                 h-8
                                 w-8
@@ -1238,22 +1142,16 @@ function Chat({ user, onSyncAnotherFolder }) {
                                 hover:text-neutral-300
                                 disabled:opacity-50
                               "
-                              title="Rename"
-                            >
-                              <FiEdit2 className="text-xs" />
-                            </button>
+                            title="Rename"
+                          >
+                            <FiEdit2 className="text-xs" />
+                          </button>
 
-                            {/* Delete */}
-
-                            <button
-                              type="button"
-                              onClick={() =>
-                                deleteConversation(
-                                  conversation.id
-                                )
-                              }
-                              disabled={loading}
-                              className="
+                          <button
+                            type="button"
+                            onClick={() => deleteConversation(conversation.id)}
+                            disabled={loading}
+                            className="
                                 mr-1
                                 flex
                                 h-8
@@ -1268,14 +1166,13 @@ function Chat({ user, onSyncAnotherFolder }) {
                                 hover:text-red-400
                                 disabled:opacity-50
                               "
-                              title="Delete"
-                            >
-                              <FiTrash2 className="text-xs" />
-                            </button>
-                          </div>
-                        );
-                      }
-                    )}
+                            title="Delete"
+                          >
+                            <FiTrash2 className="text-xs" />
+                          </button>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -1287,114 +1184,145 @@ function Chat({ user, onSyncAnotherFolder }) {
             MAIN CHAT
         ================================================== */}
 
-        <main className="relative flex h-full min-w-0 flex-1 flex-col overflow-hidden">
+        <main className="relative flex h-full min-w-0 flex-1 flex-col overflow-hidden bg-[#090909]">
           {/* Message Scroll */}
 
           <div className="min-h-0 flex-1 overflow-hidden px-4 sm:px-6">
             <div
               ref={messagesContainerRef}
               className="
-      chat-scrollbar
-      mx-auto
-      h-full
-      w-full
-      max-w-3xl
-      overflow-y-auto
-      py-6
-      sm:py-8
-    "
+                chat-scrollbar
+                mx-auto
+                h-full
+                w-full
+                max-w-3xl
+                overflow-y-auto
+                py-6
+                sm:py-8
+              "
             >
               {/* Empty State */}
 
-              {messages.length === 0 &&
-                !loading &&
-                !error ? (
-                <div className="flex min-h-[calc(100vh-260px)] items-center justify-center">
+              {messages.length === 0 && !loading && !error ? (
+                <div className="flex min-h-[calc(100vh-260px)] items-center justify-center px-2">
                   <div className="w-full max-w-2xl text-center">
-                    <div className="mx-auto mb-6 flex h-14 w-14 items-center justify-center rounded-2xl border border-white/[0.09] bg-white/[0.04]">
-                      <FiFileText className="text-xl text-neutral-300" />
+                    {/* Hero Icon */}
+
+                    <div className="relative mx-auto mb-7 flex h-16 w-16 items-center justify-center">
+                      <div className="absolute inset-0 rounded-2xl bg-white/[0.025] blur-xl" />
+
+                      <div className="relative flex h-16 w-16 items-center justify-center rounded-2xl border border-white/[0.09] bg-white/[0.035] shadow-2xl">
+                        <FiFileText className="text-xl text-neutral-300" />
+                      </div>
                     </div>
 
-                    <h1 className="text-3xl font-semibold tracking-tight">
+                    <p className="mb-3 text-[10px] font-medium uppercase tracking-[0.22em] text-neutral-700">
+                      Zentra Knowledge Base
+                    </p>
+
+                    <h1 className="text-3xl font-semibold tracking-[-0.025em] text-neutral-100 sm:text-4xl">
                       Ask your documents
                     </h1>
 
-                    <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-neutral-500">
-                      Ask questions about the documents in
-                      your Google Drive knowledge base.
+                    <p className="mx-auto mt-4 max-w-md text-sm leading-6 text-neutral-500">
+                      Ask questions about the documents in your Google Drive
+                      knowledge base.
                     </p>
 
-                    <div className="mt-8 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    {/* Suggestion Cards */}
+
+                    <div className="mt-9 grid grid-cols-1 gap-3 sm:grid-cols-2">
                       <button
                         type="button"
                         onClick={() =>
-                          setQuestion(
-                            "How many documents are available?"
-                          )
+                          setQuestion("How many documents are available?")
                         }
                         className="
-                          rounded-xl
+                          group
+                          relative
+                          overflow-hidden
+                          rounded-2xl
                           border
                           border-white/[0.07]
-                          bg-white/[0.025]
+                          bg-white/[0.02]
                           p-4
                           text-left
-                          transition
+                          transition-all
+                          duration-300
+                          hover:-translate-y-0.5
                           hover:border-white/[0.14]
                           hover:bg-white/[0.04]
+                          hover:shadow-xl
                         "
                       >
-                        <p className="text-xs font-medium text-neutral-300">
-                          Document overview
-                        </p>
+                        <div className="flex items-start gap-3">
+                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-white/[0.07] bg-white/[0.03] transition group-hover:border-white/[0.12] group-hover:bg-white/[0.055]">
+                            <FiFileText className="text-sm text-neutral-500" />
+                          </div>
 
-                        <p className="mt-1 text-[11px] text-neutral-600">
-                          How many documents are available?
-                        </p>
+                          <div className="min-w-0">
+                            <p className="text-xs font-medium text-neutral-300">
+                              Document overview
+                            </p>
+
+                            <p className="mt-1.5 text-[11px] leading-5 text-neutral-600">
+                              How many documents are available?
+                            </p>
+                          </div>
+                        </div>
                       </button>
 
                       <button
                         type="button"
                         onClick={() =>
-                          setQuestion(
-                            "Summarize the important information."
-                          )
+                          setQuestion("Summarize the important information.")
                         }
                         className="
-                          rounded-xl
+                          group
+                          relative
+                          overflow-hidden
+                          rounded-2xl
                           border
                           border-white/[0.07]
-                          bg-white/[0.025]
+                          bg-white/[0.02]
                           p-4
                           text-left
-                          transition
+                          transition-all
+                          duration-300
+                          hover:-translate-y-0.5
                           hover:border-white/[0.14]
                           hover:bg-white/[0.04]
+                          hover:shadow-xl
                         "
                       >
-                        <p className="text-xs font-medium text-neutral-300">
-                          Summarize documents
-                        </p>
+                        <div className="flex items-start gap-3">
+                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-white/[0.07] bg-white/[0.03] transition group-hover:border-white/[0.12] group-hover:bg-white/[0.055]">
+                            <FiMessageSquare className="text-sm text-neutral-500" />
+                          </div>
 
-                        <p className="mt-1 text-[11px] text-neutral-600">
-                          Summarize the important information.
-                        </p>
+                          <div className="min-w-0">
+                            <p className="text-xs font-medium text-neutral-300">
+                              Summarize documents
+                            </p>
+
+                            <p className="mt-1.5 text-[11px] leading-5 text-neutral-600">
+                              Summarize the important information.
+                            </p>
+                          </div>
+                        </div>
                       </button>
                     </div>
                   </div>
                 </div>
               ) : (
-                <div className="space-y-8">
+                <div className="space-y-8 pb-4">
                   {/* Messages */}
 
                   {messages.map((message, index) => {
-                    const isLastMessage =
-                      index === messages.length - 1;
+                    const isLastMessage = index === messages.length - 1;
 
                     const isGenerating =
-                      loading &&
-                      isLastMessage &&
-                      message.role === "assistant";
+                      loading && isLastMessage && message.role === "assistant";
 
                     return (
                       <div
@@ -1409,14 +1337,14 @@ function Chat({ user, onSyncAnotherFolder }) {
 
                         {message.role === "user" ? (
                           <div className="flex w-full justify-end">
-                            <div className="flex max-w-[85%] items-start gap-3 sm:max-w-[75%]">
-                              <div className="rounded-2xl rounded-tr-md border border-white/[0.08] bg-white/[0.07] px-4 py-3 shadow-sm">
+                            <div className="flex max-w-[88%] items-end gap-3 sm:max-w-[78%]">
+                              <div className="rounded-2xl rounded-tr-md border border-white/[0.09] bg-white/[0.075] px-4 py-3 shadow-[0_8px_30px_rgba(0,0,0,0.18)] transition hover:bg-white/[0.09]">
                                 <p className="whitespace-pre-wrap text-sm leading-6 text-neutral-200">
                                   {message.content}
                                 </p>
                               </div>
 
-                              <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.04]">
+                              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.04]">
                                 <FiUser className="text-xs text-neutral-500" />
                               </div>
                             </div>
@@ -1426,99 +1354,104 @@ function Chat({ user, onSyncAnotherFolder }) {
 
                           <div className="w-full">
                             <div className="flex items-start gap-3 sm:gap-4">
-                              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.04]">
-                                <span className="text-[10px] font-semibold text-neutral-300">
+                              {/* AI Icon */}
+
+                              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.035] shadow-sm">
+                                <span className="text-[9px] font-semibold tracking-wide text-neutral-300">
                                   AI
                                 </span>
                               </div>
 
                               <div className="min-w-0 flex-1">
-                                <p className="mb-2 text-xs font-medium text-neutral-500">
-                                  Zentra
-                                </p>
+                                <div className="mb-2 flex items-center gap-2">
+                                  <p className="text-xs font-medium text-neutral-400">
+                                    Zentra
+                                  </p>
+
+                                  <span className="h-1 w-1 rounded-full bg-neutral-700" />
+
+                                  <span className="text-[10px] text-neutral-700">
+                                    AI response
+                                  </span>
+                                </div>
 
                                 {message.content ? (
-                                  <div className="whitespace-pre-wrap text-sm leading-7 text-neutral-300">
+                                  <div className="rounded-2xl border border-white/[0.055] bg-white/[0.018] px-4 py-4 whitespace-pre-wrap text-sm leading-7 text-neutral-300 shadow-sm sm:px-5 sm:py-5">
                                     {message.content}
                                   </div>
                                 ) : isGenerating ? (
-                                  <div className="flex items-center gap-2 py-2">
-                                    <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-neutral-500" />
+                                  <div className="rounded-2xl border border-white/[0.045] bg-white/[0.012] px-4 py-4">
+                                    <div className="flex items-center gap-2">
+                                      <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-neutral-500" />
 
-                                    <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-neutral-500 [animation-delay:150ms]" />
+                                      <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-neutral-500 [animation-delay:150ms]" />
 
-                                    <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-neutral-500 [animation-delay:300ms]" />
+                                      <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-neutral-500 [animation-delay:300ms]" />
 
-                                    <span className="ml-2 text-xs text-neutral-600">
-                                      Searching your documents...
-                                    </span>
+                                      <span className="ml-2 text-xs text-neutral-600">
+                                        Searching your documents...
+                                      </span>
+                                    </div>
                                   </div>
                                 ) : null}
 
                                 {/* Sources */}
 
                                 {!isGenerating &&
-                                  message.sources?.length >
-                                  0 && (
+                                  message.sources?.length > 0 && (
                                     <div className="mt-6">
                                       <div className="mb-3 flex items-center gap-2">
-                                        <FiFileText className="text-xs text-neutral-600" />
+                                        <div className="flex h-6 w-6 items-center justify-center rounded-lg border border-white/[0.05] bg-white/[0.025]">
+                                          <FiFileText className="text-[10px] text-neutral-600" />
+                                        </div>
 
-                                        <span className="text-[11px] font-medium uppercase tracking-wider text-neutral-600">
+                                        <span className="text-[10px] font-medium uppercase tracking-[0.18em] text-neutral-600">
                                           Sources
                                         </span>
                                       </div>
 
                                       <div className="space-y-2">
                                         {message.sources.map(
-                                          (
-                                            source,
-                                            sourceIndex
-                                          ) => (
+                                          (source, sourceIndex) => (
                                             <div
-                                              key={
-                                                sourceIndex
-                                              }
+                                              key={sourceIndex}
                                               className="
-                                                rounded-xl
-                                                border
-                                                border-white/[0.06]
-                                                bg-white/[0.02]
-                                                px-4
-                                                py-3
-                                              "
+                                                  group
+                                                  rounded-xl
+                                                  border
+                                                  border-white/[0.06]
+                                                  bg-white/[0.018]
+                                                  px-4
+                                                  py-3
+                                                  transition-all
+                                                  duration-200
+                                                  hover:border-white/[0.11]
+                                                  hover:bg-white/[0.03]
+                                                "
                                             >
                                               <div className="flex items-start gap-3">
-                                                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/[0.04]">
+                                                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/[0.05] bg-white/[0.025]">
                                                   <FiFileText className="text-xs text-neutral-500" />
                                                 </div>
 
                                                 <div className="min-w-0">
                                                   <p className="truncate text-xs font-medium text-neutral-300">
-                                                    {
-                                                      source.file_name
-                                                    }
+                                                    {source.file_name}
                                                   </p>
 
-                                                  <p className="mt-0.5 text-[10px] text-neutral-600">
-                                                    Chunk{" "}
-                                                    {
-                                                      source.chunk_id
-                                                    }
-
+                                                  <p className="mt-1 text-[10px] text-neutral-600">
+                                                    Chunk {source.chunk_id}
                                                     {source.path && (
                                                       <>
                                                         {" · "}
-                                                        {
-                                                          source.path
-                                                        }
+                                                        {source.path}
                                                       </>
                                                     )}
                                                   </p>
                                                 </div>
                                               </div>
                                             </div>
-                                          )
+                                          ),
                                         )}
                                       </div>
                                     </div>
@@ -1531,17 +1464,14 @@ function Chat({ user, onSyncAnotherFolder }) {
                     );
                   })}
 
-                  <div
-                    ref={messagesEndRef}
-                    className="h-1"
-                  />
+                  <div ref={messagesEndRef} className="h-1" />
                 </div>
               )}
 
               {/* Error */}
 
               {error && (
-                <div className="mt-8 rounded-xl border border-red-500/10 bg-red-500/[0.04] px-4 py-3 text-xs text-red-400">
+                <div className="mt-8 rounded-xl border border-red-500/[0.15] bg-red-500/[0.04] px-4 py-3 text-xs leading-5 text-red-400">
                   {error}
                 </div>
               )}
@@ -1552,14 +1482,12 @@ function Chat({ user, onSyncAnotherFolder }) {
               COMPOSER
           ================================================== */}
 
-          <div className="sticky bottom-0 z-40 w-full shrink-0 border-t border-white/[0.06] bg-[#0d0d0d] px-4 py-3 sm:px-6 sm:py-4">
+          <div className="sticky bottom-0 z-40 w-full shrink-0 border-t border-white/[0.06] bg-[#090909]/95 px-4 py-3 backdrop-blur-2xl sm:px-6 sm:py-4">
             <div className="mx-auto w-full max-w-3xl">
-              <div className="rounded-2xl border border-white/[0.09] bg-[#151515] p-2 shadow-2xl backdrop-blur-xl">
+              <div className="rounded-2xl border border-white/[0.09] bg-[#131313]/95 p-2 shadow-[0_-10px_40px_rgba(0,0,0,0.18)] backdrop-blur-2xl transition-all duration-200 focus-within:border-white/[0.16] focus-within:bg-[#151515] focus-within:shadow-[0_-10px_50px_rgba(0,0,0,0.25)]">
                 <textarea
                   value={question}
-                  onChange={(event) =>
-                    setQuestion(event.target.value)
-                  }
+                  onChange={(event) => setQuestion(event.target.value)}
                   onKeyDown={handleKeyDown}
                   placeholder="Ask anything about your documents..."
                   rows={1}
@@ -1583,7 +1511,7 @@ function Chat({ user, onSyncAnotherFolder }) {
 
                 <div className="flex items-center justify-between px-2 pb-1 pt-1">
                   <div className="hidden items-center gap-1.5 text-[10px] text-neutral-700 sm:flex">
-                    <FiShield />
+                    <FiShield className="text-[10px]" />
 
                     <span>Drive documents</span>
                   </div>
@@ -1591,9 +1519,7 @@ function Chat({ user, onSyncAnotherFolder }) {
                   <button
                     type="button"
                     onClick={askQuestion}
-                    disabled={
-                      loading || !question.trim()
-                    }
+                    disabled={loading || !question.trim()}
                     className="
                       ml-auto
                       flex
@@ -1604,11 +1530,17 @@ function Chat({ user, onSyncAnotherFolder }) {
                       rounded-xl
                       bg-white
                       text-black
-                      transition
+                      shadow-lg
+                      transition-all
+                      duration-200
+                      hover:-translate-y-0.5
                       hover:bg-neutral-200
+                      hover:shadow-xl
+                      active:translate-y-0
                       disabled:cursor-not-allowed
                       disabled:bg-white/[0.08]
                       disabled:text-neutral-600
+                      disabled:shadow-none
                     "
                   >
                     <FiArrowUp className="text-sm" />
@@ -1616,9 +1548,9 @@ function Chat({ user, onSyncAnotherFolder }) {
                 </div>
               </div>
 
-              <p className="mt-2 text-center text-[10px] text-neutral-600">
-                AI-generated answers are based on your
-                indexed Google Drive documents.
+              <p className="mt-2 text-center text-[10px] text-neutral-700">
+                AI-generated answers are based on your indexed Google Drive
+                documents.
               </p>
             </div>
           </div>

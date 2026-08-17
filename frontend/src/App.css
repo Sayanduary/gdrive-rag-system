@@ -11,11 +11,8 @@
   opacity: 0.035;
 
   background-image:
-    linear-gradient(rgba(255, 255, 255, 0.5) 1px,
-      transparent 1px),
-    linear-gradient(90deg,
-      rgba(255, 255, 255, 0.5) 1px,
-      transparent 1px);
+    linear-gradient(rgba(255, 255, 255, 0.5) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.5) 1px, transparent 1px);
 
   background-size: 48px 48px;
 }
@@ -42,7 +39,6 @@
   z-index: -1;
 }
 
-
 /* =========================================================
    BOXES
 ========================================================= */
@@ -52,10 +48,11 @@
 
   border: 1px solid var(--border);
 
-  background:
-    linear-gradient(145deg,
-      rgba(255, 255, 255, 0.035),
-      rgba(255, 255, 255, 0.012));
+  background: linear-gradient(
+    145deg,
+    rgba(255, 255, 255, 0.035),
+    rgba(255, 255, 255, 0.012)
+  );
 
   backdrop-filter: blur(20px);
 
@@ -69,12 +66,12 @@
 .zentra-box:hover {
   border-color: var(--border-hover);
 
-  background:
-    linear-gradient(145deg,
-      rgba(255, 255, 255, 0.045),
-      rgba(255, 255, 255, 0.018));
+  background: linear-gradient(
+    145deg,
+    rgba(255, 255, 255, 0.045),
+    rgba(255, 255, 255, 0.018)
+  );
 }
-
 
 /* =========================================================
    FEATURE BOX
@@ -100,7 +97,6 @@
 
   transform: translateY(-2px);
 }
-
 
 /* =========================================================
    ICON BOX
@@ -137,7 +133,6 @@
   background: rgba(255, 255, 255, 0.05);
 }
 
-
 /* =========================================================
    ORIGINAL BOXED NEXT STEPS
 ========================================================= */
@@ -155,11 +150,10 @@
 
   backdrop-filter: blur(20px);
 
-  box-shadow:
-    0 20px 70px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 20px 70px rgba(0, 0, 0, 0.25);
 }
 
-#next-steps>div {
+#next-steps > div {
   flex: 1 1 0;
 
   padding: 32px;
@@ -173,16 +167,15 @@
     border-color 0.3s ease;
 }
 
-#next-steps>div:first-child {
+#next-steps > div:first-child {
   border-left: none;
 }
 
-#next-steps>div:hover {
+#next-steps > div:hover {
   background: var(--card-hover);
 
   border-color: var(--border-hover);
 }
-
 
 /* =========================================================
    DOCS BOX
@@ -191,7 +184,6 @@
 #docs {
   border-right: 1px solid var(--border);
 }
-
 
 /* =========================================================
    ICON
@@ -210,12 +202,11 @@
     transform 0.3s ease;
 }
 
-#next-steps>div:hover .icon {
+#next-steps > div:hover .icon {
   color: var(--text);
 
   transform: translateY(-1px);
 }
-
 
 /* =========================================================
    LINKS / BUTTON BOXES
@@ -280,7 +271,6 @@
   height: 18px;
 }
 
-
 /* =========================================================
    SPACER
 ========================================================= */
@@ -292,7 +282,6 @@
 
   background: rgba(255, 255, 255, 0.01);
 }
-
 
 /* =========================================================
    TICKS
@@ -329,7 +318,6 @@
   border-right-color: var(--border);
 }
 
-
 /* =========================================================
    MOBILE
 ========================================================= */
@@ -341,7 +329,7 @@
     text-align: center;
   }
 
-  #next-steps>div {
+  #next-steps > div {
     padding: 24px 20px;
   }
 
@@ -381,14 +369,13 @@
 ========================================================= */
 
 .chat-scrollbar {
-  overflow-y: auto;
   scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.16) transparent;
+  scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
+  scrollbar-gutter: stable;
 }
 
-/* Chrome / Edge / Safari */
 .chat-scrollbar::-webkit-scrollbar {
-  width: 7px;
+  width: 6px;
 }
 
 .chat-scrollbar::-webkit-scrollbar-track {
@@ -396,14 +383,32 @@
 }
 
 .chat-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.12);
   border-radius: 999px;
-  border: 2px solid transparent;
-  background-clip: padding-box;
+  background: rgba(255, 255, 255, 0.12);
 }
 
 .chat-scrollbar::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.22);
-  border: 2px solid transparent;
-  background-clip: padding-box;
+}
+
+.chat-sidebar-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
+}
+
+.chat-sidebar-scrollbar::-webkit-scrollbar {
+  width: 5px;
+}
+
+.chat-sidebar-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.chat-sidebar-scrollbar::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.chat-sidebar-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.18);
 }
