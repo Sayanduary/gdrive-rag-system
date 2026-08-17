@@ -1,4 +1,3 @@
-from urllib.parse import urlparse
 from fastapi import APIRouter, Request, HTTPException
 from fastapi.responses import RedirectResponse
 from google_auth_oauthlib.flow import Flow
@@ -8,7 +7,7 @@ from config import settings
 
 router = APIRouter(
     prefix="/api/auth",
-    tags=["Authentication"]
+    tags=["Authentication"],
 )
 
 
@@ -20,158 +19,294 @@ GOOGLE_SCOPES = [
 ]
 
 
+# ==================================================
+# GOOGLE FLOW
+# ==================================================
+
 def create_google_flow():
 
     return Flow.from_client_config(
         {
             "web": {
-                "client_id": settings.GOOGLE_CLIENT_ID,
-                "client_secret": settings.GOOGLE_CLIENT_SECRET,
-                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-                "token_uri": "https://oauth2.googleapis.com/token",
+                "client_id":
+                    settings.GOOGLE_CLIENT_ID,
+
+                "client_secret":
+                    settings.GOOGLE_CLIENT_SECRET,
+
+                "auth_uri":
+                    "https://accounts.google.com/o/oauth2/auth",
+
+                "token_uri":
+                    "https://oauth2.googleapis.com/token",
+
                 "redirect_uris": [
                     settings.GOOGLE_REDIRECT_URI
                 ],
             }
         },
+
         scopes=GOOGLE_SCOPES,
-        redirect_uri=settings.GOOGLE_REDIRECT_URI,
+
+        redirect_uri=
+            settings.GOOGLE_REDIRECT_URI,
     )
 
 
-@router.get("/google")
-def google_login(request: Request):
+# ==================================================
+# LOGIN
+# ==================================================
 
-    referer = request.query_params.get("redirect_url") or request.headers.get("referer")
-    if referer:
-        parsed = urlparse(referer)
-        if parsed.scheme and parsed.netloc:
-            request.session["frontend_url"] = f"{parsed.scheme}://{parsed.netloc}"
+@router.get("/google")
+def google_login(
+    request: Request,
+):
 
     flow = create_google_flow()
 
-    authorization_url, state = flow.authorization_url(
-        access_type="offline",
-        prompt="consent",
+    authorization_url, state = (
+        flow.authorization_url(
+            access_type="offline",
+            prompt="consent",
+            include_granted_scopes="true",
+        )
     )
 
-    request.session["oauth_state"] = state
+    request.session[
+        "oauth_state"
+    ] = state
 
     code_verifier = getattr(
         flow,
         "code_verifier",
-        None
+        None,
     )
 
     if code_verifier:
-        request.session["oauth_code_verifier"] = (
-            code_verifier
-        )
+
+        request.session[
+            "oauth_code_verifier"
+        ] = code_verifier
 
     return RedirectResponse(
         authorization_url
     )
 
 
+# ==================================================
+# CALLBACK
+# ==================================================
 
 @router.get("/google/callback")
-def google_callback(request: Request):
+def google_callback(
+    request: Request,
+):
 
-    code = request.query_params.get("code")
+    code = request.query_params.get(
+        "code"
+    )
+
+    # ------------------------------------------
+    # Google returned an OAuth error
+    # ------------------------------------------
 
     if not code:
 
-        error = request.query_params.get("error")
+        error = request.query_params.get(
+            "error"
+        )
 
         if error:
+
             raise HTTPException(
                 status_code=400,
-                detail=f"Google OAuth error: {error}"
+                detail=(
+                    "Google OAuth error: "
+                    f"{error}"
+                ),
             )
 
         raise HTTPException(
             status_code=400,
             detail=(
-                "Missing Google authorization code. "
-                "Start login from /api/auth/google."
-            )
+                "Missing Google authorization "
+                "code."
+            ),
         )
 
+    # ------------------------------------------
+    # Recreate flow
+    # ------------------------------------------
+
     flow = create_google_flow()
+
+    # ------------------------------------------
+    # Restore PKCE verifier
+    # ------------------------------------------
 
     code_verifier = request.session.get(
         "oauth_code_verifier"
     )
 
     if code_verifier:
-        flow.code_verifier = code_verifier
+
+        flow.code_verifier = (
+            code_verifier
+        )
+
+    # ------------------------------------------
+    # Restore OAuth state
+    # ------------------------------------------
 
     state = request.session.get(
         "oauth_state"
     )
 
     if state:
+
         flow.state = state
 
-    auth_response_url = str(request.url)
-    if settings.GOOGLE_REDIRECT_URI.startswith("https://") and auth_response_url.startswith("http://"):
-        auth_response_url = auth_response_url.replace("http://", "https://", 1)
+    # ------------------------------------------
+    # Render's proxy terminates HTTPS.
+    #
+    # Make sure Google's callback URL is
+    # interpreted as HTTPS.
+    # ------------------------------------------
 
-    flow.fetch_token(
-        authorization_response=auth_response_url
+    auth_response_url = str(
+        request.url
     )
 
+    if (
+        settings.GOOGLE_REDIRECT_URI.startswith(
+            "https://"
+        )
+        and auth_response_url.startswith(
+            "http://"
+        )
+    ):
 
-    credentials = flow.credentials
+        auth_response_url = (
+            "https://"
+            + auth_response_url[
+                len("http://"):]
+        )
 
-    request.session["google_credentials"] = {
-        "token": credentials.token,
-        "refresh_token": credentials.refresh_token,
-        "token_uri": credentials.token_uri,
-        "client_id": credentials.client_id,
-        "client_secret": credentials.client_secret,
-        "scopes": credentials.scopes,
+    # ------------------------------------------
+    # Exchange authorization code
+    # ------------------------------------------
+
+    flow.fetch_token(
+        authorization_response=
+            auth_response_url
+    )
+
+    credentials = (
+        flow.credentials
+    )
+
+    # ------------------------------------------
+    # Store Google credentials
+    # ------------------------------------------
+
+    request.session[
+        "google_credentials"
+    ] = {
+        "token":
+            credentials.token,
+
+        "refresh_token":
+            credentials.refresh_token,
+
+        "token_uri":
+            credentials.token_uri,
+
+        "client_id":
+            credentials.client_id,
+
+        "client_secret":
+            credentials.client_secret,
+
+        "scopes":
+            credentials.scopes,
     }
 
-    user_response = flow.oauth2session.get(
-        "https://www.googleapis.com/oauth2/v3/userinfo"
+    # ------------------------------------------
+    # Get Google user
+    # ------------------------------------------
+
+    user_response = (
+        flow.oauth2session.get(
+            "https://www.googleapis.com/oauth2/v3/userinfo"
+        )
     )
 
     user_response.raise_for_status()
 
-    user_info = user_response.json()
+    user_info = (
+        user_response.json()
+    )
 
-    request.session["google_user"] = {
-        "sub": user_info.get("sub"),
-        "email": user_info.get("email"),
-        "name": user_info.get("name"),
-        "picture": user_info.get("picture"),
+    request.session[
+        "google_user"
+    ] = {
+        "sub":
+            user_info.get(
+                "sub"
+            ),
+
+        "email":
+            user_info.get(
+                "email"
+            ),
+
+        "name":
+            user_info.get(
+                "name"
+            ),
+
+        "picture":
+            user_info.get(
+                "picture"
+            ),
     }
+
+    # ------------------------------------------
+    # Cleanup temporary OAuth state
+    # ------------------------------------------
 
     request.session.pop(
         "oauth_state",
-        None
+        None,
     )
 
     request.session.pop(
         "oauth_code_verifier",
-        None
+        None,
     )
 
-    frontend_url = request.session.pop(
-        "frontend_url",
-        None
-    ) or settings.FRONTEND_URL
+    # ------------------------------------------
+    # Redirect to frontend
+    # ------------------------------------------
+
+    frontend_url = (
+        settings.FRONTEND_URL
+        .rstrip("/")
+    )
 
     return RedirectResponse(
-        f"{frontend_url.rstrip('/')}/"
+        url=frontend_url
     )
 
 
-
+# ==================================================
+# CURRENT USER
+# ==================================================
 
 @router.get("/me")
-def get_current_user(request: Request):
+def get_current_user(
+    request: Request,
+):
 
     user = request.session.get(
         "google_user"
@@ -180,20 +315,31 @@ def get_current_user(request: Request):
     if not user:
 
         return {
-            "authenticated": False
+            "authenticated":
+                False
         }
 
     return {
-        "authenticated": True,
-        "user": user
+        "authenticated":
+            True,
+
+        "user":
+            user,
     }
 
 
+# ==================================================
+# LOGOUT
+# ==================================================
+
 @router.post("/logout")
-def logout(request: Request):
+def logout(
+    request: Request,
+):
 
     request.session.clear()
 
     return {
-        "success": True
+        "success":
+            True
     }
