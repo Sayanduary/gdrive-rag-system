@@ -62,46 +62,76 @@ def google_login(
     request: Request,
 ):
 
-    print(
-        "========================================"
-    )
-
-    print(
-        "GOOGLE OAUTH LOGIN"
-    )
+    print()
+    print("=" * 70)
+    print("GOOGLE OAUTH LOGIN")
+    print("=" * 70)
 
     print(
         "GOOGLE_CLIENT_ID:",
-        settings.GOOGLE_CLIENT_ID
+        settings.GOOGLE_CLIENT_ID,
     )
 
     print(
         "GOOGLE_REDIRECT_URI:",
-        settings.GOOGLE_REDIRECT_URI
+        settings.GOOGLE_REDIRECT_URI,
     )
 
     print(
         "FRONTEND_URL:",
-        settings.FRONTEND_URL
+        settings.FRONTEND_URL,
     )
+
+    # --------------------------------------------------
+    # IMPORTANT
+    #
+    # Remove the currently authenticated Zentra user
+    # before starting another Google OAuth flow.
+    #
+    # This prevents the previous application's session
+    # from surviving an account switch.
+    # --------------------------------------------------
+
+    request.session.clear()
 
     print(
-        "========================================"
+        "Previous Zentra session cleared."
     )
 
+    # --------------------------------------------------
+    # Create OAuth flow
+    # --------------------------------------------------
+
     flow = create_google_flow()
+
+    # --------------------------------------------------
+    # Force Google account chooser
+    # --------------------------------------------------
 
     authorization_url, state = (
         flow.authorization_url(
             access_type="offline",
-            prompt="consent",
+
+            # IMPORTANT:
+            # select_account forces Google to ask
+            # which account should be used.
+            prompt="select_account consent",
+
             include_granted_scopes="true",
         )
     )
 
+    # --------------------------------------------------
+    # Store OAuth state
+    # --------------------------------------------------
+
     request.session[
         "oauth_state"
     ] = state
+
+    # --------------------------------------------------
+    # Store PKCE verifier if generated
+    # --------------------------------------------------
 
     code_verifier = getattr(
         flow,
@@ -114,6 +144,18 @@ def google_login(
         request.session[
             "oauth_code_verifier"
         ] = code_verifier
+
+    print(
+        "OAuth state stored."
+    )
+
+    print(
+        "Redirecting to Google..."
+    )
+
+    print(
+        "=" * 70
+    )
 
     return RedirectResponse(
         authorization_url
@@ -129,35 +171,30 @@ def google_callback(
     request: Request,
 ):
 
-    print(
-        "========================================"
-    )
-
-    print(
-        "GOOGLE OAUTH CALLBACK"
-    )
+    print()
+    print("=" * 70)
+    print("GOOGLE OAUTH CALLBACK")
+    print("=" * 70)
 
     print(
         "REQUEST URL:",
-        str(request.url)
+        str(request.url),
     )
 
     print(
         "CONFIGURED REDIRECT:",
-        settings.GOOGLE_REDIRECT_URI
+        settings.GOOGLE_REDIRECT_URI,
     )
 
-    print(
-        "========================================"
-    )
+    print("=" * 70)
+
+    # ==================================================
+    # AUTHORIZATION CODE
+    # ==================================================
 
     code = request.query_params.get(
         "code"
     )
-
-    # ------------------------------------------
-    # OAuth error
-    # ------------------------------------------
 
     if not code:
 
@@ -183,18 +220,20 @@ def google_callback(
             ),
         )
 
-    # ------------------------------------------
-    # Create OAuth flow
-    # ------------------------------------------
+    # ==================================================
+    # CREATE FLOW
+    # ==================================================
 
     flow = create_google_flow()
 
-    # ------------------------------------------
-    # Restore PKCE verifier
-    # ------------------------------------------
+    # ==================================================
+    # RESTORE PKCE VERIFIER
+    # ==================================================
 
-    code_verifier = request.session.get(
-        "oauth_code_verifier"
+    code_verifier = (
+        request.session.get(
+            "oauth_code_verifier"
+        )
     )
 
     if code_verifier:
@@ -203,21 +242,23 @@ def google_callback(
             code_verifier
         )
 
-    # ------------------------------------------
-    # Restore state
-    # ------------------------------------------
+    # ==================================================
+    # RESTORE STATE
+    # ==================================================
 
-    state = request.session.get(
-        "oauth_state"
+    state = (
+        request.session.get(
+            "oauth_state"
+        )
     )
 
     if state:
 
         flow.state = state
 
-    # ------------------------------------------
-    # Correct proxy HTTPS
-    # ------------------------------------------
+    # ==================================================
+    # CORRECT RENDER HTTPS PROXY
+    # ==================================================
 
     auth_response_url = str(
         request.url
@@ -241,12 +282,12 @@ def google_callback(
 
     print(
         "AUTHORIZATION RESPONSE URL:",
-        auth_response_url
+        auth_response_url,
     )
 
-    # ------------------------------------------
-    # Exchange authorization code
-    # ------------------------------------------
+    # ==================================================
+    # EXCHANGE CODE FOR TOKEN
+    # ==================================================
 
     flow.fetch_token(
         authorization_response=
@@ -257,9 +298,9 @@ def google_callback(
         flow.credentials
     )
 
-    # ------------------------------------------
-    # Store Google credentials
-    # ------------------------------------------
+    # ==================================================
+    # GOOGLE CREDENTIALS
+    # ==================================================
 
     request.session[
         "google_credentials"
@@ -283,9 +324,9 @@ def google_callback(
             credentials.scopes,
     }
 
-    # ------------------------------------------
-    # Fetch Google user
-    # ------------------------------------------
+    # ==================================================
+    # FETCH GOOGLE USER
+    # ==================================================
 
     user_response = (
         flow.oauth2session.get(
@@ -299,9 +340,11 @@ def google_callback(
         user_response.json()
     )
 
-    request.session[
-        "google_user"
-    ] = {
+    # ==================================================
+    # BUILD USER
+    # ==================================================
+
+    google_user = {
         "sub":
             user_info.get(
                 "sub"
@@ -323,9 +366,41 @@ def google_callback(
             ),
     }
 
-    # ------------------------------------------
-    # Remove temporary OAuth values
-    # ------------------------------------------
+    # --------------------------------------------------
+    # Validate Google identity
+    # --------------------------------------------------
+
+    if not google_user["sub"]:
+
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Google did not return "
+                "a user ID."
+            ),
+        )
+
+    if not google_user["email"]:
+
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Google did not return "
+                "an email address."
+            ),
+        )
+
+    # ==================================================
+    # STORE USER IN SESSION
+    # ==================================================
+
+    request.session[
+        "google_user"
+    ] = google_user
+
+    # ==================================================
+    # CLEAN TEMPORARY OAUTH VALUES
+    # ==================================================
 
     request.session.pop(
         "oauth_state",
@@ -337,16 +412,53 @@ def google_callback(
         None,
     )
 
-    print(
-        "AUTHENTICATED USER:",
-        request.session.get(
-            "google_user"
-        )
+    # --------------------------------------------------
+    # IMPORTANT:
+    # Do not carry the previous folder session forward.
+    # The new user must start without an old folder.
+    # --------------------------------------------------
+
+    request.session.pop(
+        "active_folder_id",
+        None,
     )
 
-    # ------------------------------------------
-    # Redirect to frontend
-    # ------------------------------------------
+    # ==================================================
+    # DEBUG
+    # ==================================================
+
+    print()
+    print("=" * 70)
+    print("AUTHENTICATED USER")
+    print("=" * 70)
+
+    print(
+        "SUB:",
+        google_user["sub"],
+    )
+
+    print(
+        "EMAIL:",
+        google_user["email"],
+    )
+
+    print(
+        "NAME:",
+        google_user["name"],
+    )
+
+    print("=" * 70)
+
+    print(
+        "SESSION USER:",
+        request.session.get(
+            "google_user"
+        ),
+    )
+
+    # ==================================================
+    # FRONTEND REDIRECT
+    # ==================================================
 
     frontend_url = (
         settings.FRONTEND_URL
@@ -355,8 +467,10 @@ def google_callback(
 
     print(
         "REDIRECTING TO:",
-        frontend_url
+        frontend_url,
     )
+
+    print("=" * 70)
 
     return RedirectResponse(
         url=frontend_url
@@ -372,20 +486,22 @@ def get_current_user(
     request: Request,
 ):
 
-    user = request.session.get(
-        "google_user"
+    user = (
+        request.session.get(
+            "google_user"
+        )
     )
 
     print(
         "AUTH /ME USER:",
-        user
+        user,
     )
 
     if not user:
 
         return {
             "authenticated":
-                False
+                False,
         }
 
     return {
@@ -406,9 +522,16 @@ def logout(
     request: Request,
 ):
 
+    print(
+        "LOGGING OUT USER:",
+        request.session.get(
+            "google_user"
+        ),
+    )
+
     request.session.clear()
 
     return {
         "success":
-            True
+            True,
     }
