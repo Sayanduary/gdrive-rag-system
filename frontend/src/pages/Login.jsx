@@ -66,12 +66,11 @@ function Login({ user, checkingAuth }) {
           </div>
 
           <h1 className="text-3xl font-semibold tracking-tight">
-            Google Drive RAG
+            Zentra
           </h1>
 
-          <p className="mx-auto mt-3 max-w-sm text-sm leading-6 text-neutral-500">
-            Connect your Google Drive and chat with your documents using
-            AI-powered search.
+          <p className="mx-auto mt-3 max-w-sm text-sm leading-6 text-neutral-400">
+            Where Your Data Becomes Knowledge
           </p>
 
           <div className="mt-8 rounded-2xl border border-white/[0.08] bg-white/[0.035] p-6 text-left shadow-2xl backdrop-blur-xl">

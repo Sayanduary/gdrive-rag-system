@@ -106,7 +106,7 @@ function Navbar({
           </div>
 
           <span className="text-[18px] font-medium tracking-tight text-neutral-200">
-            Google Drive RAG
+            Zentra
           </span>
         </button>
 

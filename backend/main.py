@@ -172,7 +172,7 @@ def root():
 
     return {
         "message":
-            "Google Drive RAG API",
+            "Zentra API",
 
         "status":
             "running",

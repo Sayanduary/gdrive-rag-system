@@ -1042,7 +1042,7 @@ function Chat({ user, onSyncAnotherFolder }) {
 
                               <div className="min-w-0 flex-1">
                                 <p className="mb-2 text-xs font-medium text-neutral-500">
-                                  Google Drive RAG
+                                  Zentra
                                 </p>
 
                                 {message.content ? (
