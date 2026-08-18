@@ -1,28 +1,57 @@
-# Frontend — Google Drive RAG System
+# Frontend — Zentra Google Drive RAG System
 
-React 19 single-page application (SPA) built with Vite for interacting with the Google Drive RAG system.
+React 19 Single Page Application (SPA) built with Vite and Tailwind CSS v4, delivering a modern, dark-mode glassmorphism interface for indexing Google Drive folders and interacting with RAG knowledge bases.
 
-## Features
+---
 
-- **Google OAuth Login**: Authenticate with Google to connect Drive permissions.
-- **Drive Ingestion UI**: Enter a Google Drive folder ID to initiate recursive document processing and indexing.
-- **Interactive RAG Chat**: Ask questions based on ingested documents and view citations and source file metadata.
+## Key Features & Pages
 
-## Scripts
+- 🔑 **Google Login (`/login`)**: Direct authentication flow linking Google permissions to the backend.
+- 📁 **Analyze Folder (`/analyze`)**: Enter any Google Drive folder URL to initiate non-blocking background document parsing. Displays real-time status updates via polling.
+- 📊 **Dashboard (`/dashboard`)**: Overview of analyzed folders, file counts, and chunk statistics. Supports viewing indexed files and deleting individual files or entire folders.
+- 💬 **Interactive Chat (`/chat`)**: Multi-conversation RAG interface supporting real-time Server-Sent Events (SSE) streaming answers, markdown formatting, mobile drawer navigation, and clickable document source badges.
 
-- `npm run dev`: Start Vite development server on `http://localhost:5173`.
-- `npm run build`: Build production assets into the `dist/` directory.
-- `npm run preview`: Preview the production build locally.
-- `npm run lint`: Run ESLint checks.
+---
 
-## Docker Setup
+## Technical Highlights
 
-The frontend uses a multi-stage Docker build:
-1. **Build stage**: `node:20-alpine` runs `npm run build`.
-2. **Production stage**: `nginx:alpine` serves static files with client-side SPA routing (`nginx.conf`).
+- **Vercel Same-Origin Proxy**: Uses `vercel.json` rewrite rules to route `/api/*` requests to the Render backend, guaranteeing session cookies are treated as first-party cookies across browsers.
+- **Background Task Polling**: Listens to `/api/drive/status/{job_id}` background progress updates so long-running folder parsing operations never timeout or freeze the user interface.
+- **Zero-FOUC Font Optimization**: Preconnects Google Fonts directly in `index.html` to eliminate render blocking and typography layout shifts.
 
-To build and run with Docker:
+---
+
+## Available Scripts
+
+- `npm run dev`: Starts local Vite development server at `http://localhost:5173`.
+- `npm run build`: Bundles production assets into the `dist/` directory.
+- `npm run preview`: Previews the production build locally.
+- `npm run lint`: Runs ESLint checks across code files.
+
+---
+
+## Deployment & Docker
+
+### Vercel Deployment
+The frontend is pre-configured for Vercel deployment. `vercel.json` handles client-side routing and API proxying:
+
+```json
+{
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://gdrive-rag-system-h5sf.onrender.com/api/:path*"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
+```
+
+### Docker Execution
 ```bash
-docker build -t gdrive-rag-frontend .
-docker run -p 5173:80 gdrive-rag-frontend
+docker build -t zentra-frontend .
+docker run -p 5173:80 zentra-frontend
 ```
