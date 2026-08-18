@@ -75,7 +75,34 @@ function Analyze({ user, onAnalysisComplete, onLogout }) {
       console.log("Data:", response.data);
       console.log("========================================");
 
-      const newAnalysis = response.data;
+      let newAnalysis = response.data;
+
+      // ------------------------------------------
+      // POLL BACKGROUND JOB IF ASYNC
+      // ------------------------------------------
+
+      if (newAnalysis?.job_id) {
+        const jobId = newAnalysis.job_id;
+        setStatus(newAnalysis.progress || "Analyzing folder in background...");
+
+        while (true) {
+          await new Promise((resolve) => setTimeout(resolve, 2000));
+
+          const statusRes = await api.get(`/api/drive/status/${jobId}`);
+          const jobData = statusRes.data;
+
+          if (jobData?.progress) {
+            setStatus(jobData.progress);
+          }
+
+          if (jobData?.status === "completed") {
+            newAnalysis = jobData.result;
+            break;
+          } else if (jobData?.status === "failed") {
+            throw new Error(jobData.error || "Folder analysis failed.");
+          }
+        }
+      }
 
       // ------------------------------------------
       // VALIDATE RESPONSE

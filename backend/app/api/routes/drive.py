@@ -1,6 +1,8 @@
 import re
+import uuid
+import threading
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, BackgroundTasks
 from pydantic import BaseModel
 
 from app.services.gdrive import get_drive_service
@@ -15,6 +17,9 @@ router = APIRouter(
     prefix="/api/drive",
     tags=["Google Drive"],
 )
+
+ANALYSIS_JOBS = {}
+ANALYSIS_JOBS_LOCK = threading.Lock()
 
 
 # ==================================================
@@ -615,6 +620,85 @@ def register_analyzed_folder(
 
 
 # ==================================================
+# BACKGROUND ANALYSIS WORKER
+# ==================================================
+
+def _run_drive_analysis(
+    job_id: str,
+    credentials_data: dict,
+    user_id: str,
+    folder_id: str,
+    folder_url: str,
+):
+    try:
+        with ANALYSIS_JOBS_LOCK:
+            ANALYSIS_JOBS[job_id]["progress"] = "Connecting to Google Drive..."
+
+        drive_service = get_drive_service(credentials_data)
+
+        with ANALYSIS_JOBS_LOCK:
+            ANALYSIS_JOBS[job_id]["progress"] = "Analyzing and indexing documents..."
+
+        ingestion = IngestionService(
+            drive_service=drive_service,
+            user_id=user_id,
+            vector_store=vector_store,
+        )
+
+        result = ingestion.ingest_folder(folder_id)
+
+        with ANALYSIS_JOBS_LOCK:
+            ANALYSIS_JOBS[job_id]["progress"] = "Registering folder metadata..."
+
+        registry_result = register_analyzed_folder(
+            user_id=user_id,
+            folder_id=folder_id,
+            folder_url=folder_url,
+            drive_service=drive_service,
+        )
+
+        response = {
+            "success": True,
+            "folder_id": folder_id,
+            "folder_name": registry_result["folder_name"],
+            "file_count": registry_result["file_count"],
+            "chunk_count": registry_result["chunk_count"],
+            **result,
+        }
+
+        with ANALYSIS_JOBS_LOCK:
+            ANALYSIS_JOBS[job_id]["status"] = "completed"
+            ANALYSIS_JOBS[job_id]["progress"] = "Analysis completed successfully."
+            ANALYSIS_JOBS[job_id]["result"] = response
+
+        print(f"BACKGROUND ANALYSIS JOB {job_id} COMPLETED SUCCESSFULLY")
+
+    except Exception as error:
+        print(f"BACKGROUND ANALYSIS JOB {job_id} FAILED: {error}")
+        with ANALYSIS_JOBS_LOCK:
+            ANALYSIS_JOBS[job_id]["status"] = "failed"
+            ANALYSIS_JOBS[job_id]["error"] = str(error)
+
+
+# ==================================================
+# ANALYSIS JOB STATUS
+# ==================================================
+
+@router.get("/status/{job_id}")
+def get_analysis_status(job_id: str):
+    with ANALYSIS_JOBS_LOCK:
+        job = ANALYSIS_JOBS.get(job_id)
+
+    if not job:
+        raise HTTPException(
+            status_code=404,
+            detail="Analysis job not found.",
+        )
+
+    return job
+
+
+# ==================================================
 # ANALYZE DRIVE FOLDER
 # ==================================================
 
@@ -622,76 +706,40 @@ def register_analyzed_folder(
 def analyze_drive(
     payload: DriveAnalyzeRequest,
     request: Request,
+    background_tasks: BackgroundTasks,
 ):
 
     # ==================================================
     # GOOGLE USER
     # ==================================================
 
-    user = request.session.get(
-        "google_user"
-    )
+    user = request.session.get("google_user")
 
     if not user:
-
         raise HTTPException(
             status_code=401,
-            detail=(
-                "User is not authenticated."
-            ),
+            detail="User is not authenticated.",
         )
 
-    user_id = user.get(
-        "sub"
-    )
+    user_id = user.get("sub")
 
     if not user_id:
-
         raise HTTPException(
             status_code=401,
-            detail=(
-                "Google user ID is missing."
-            ),
+            detail="Google user ID is missing.",
         )
 
     # ==================================================
     # GOOGLE CREDENTIALS
     # ==================================================
 
-    credentials_data = (
-        request.session.get(
-            "google_credentials"
-        )
-    )
-
-    print()
-    print("=" * 70)
-    print("DRIVE AUTHENTICATION CHECK")
-    print("=" * 70)
-
-    print(
-        f"User ID: {user_id}"
-    )
-
-    print(
-        f"User email: "
-        f"{user.get('email')}"
-    )
-
-    print(
-        "Google credentials exist:",
-        bool(credentials_data),
-    )
-
-    print("=" * 70)
+    credentials_data = request.session.get("google_credentials")
 
     if not credentials_data:
-
         raise HTTPException(
             status_code=401,
             detail=(
-                "Google Drive authorization is "
-                "missing or expired. "
+                "Google Drive authorization is missing or expired. "
                 "Please sign in with Google again."
             ),
         )
@@ -701,218 +749,59 @@ def analyze_drive(
     # ==================================================
 
     try:
-
-        folder_id = extract_folder_id(
-            payload.folder_url
-        )
-
+        folder_id = extract_folder_id(payload.folder_url)
     except ValueError as error:
-
         raise HTTPException(
             status_code=400,
             detail=str(error),
         )
 
     # ==================================================
-    # FOLDER PARSING DEBUG
-    # ==================================================
-
-    print()
-    print("=" * 70)
-    print("DRIVE FOLDER PARSING")
-    print("=" * 70)
-
-    print(
-        f"Original URL: "
-        f"{payload.folder_url}"
-    )
-
-    print(
-        f"Extracted folder ID: "
-        f"{folder_id}"
-    )
-
-    print("=" * 70)
-
-    # ==================================================
-    # ANALYZE / INGEST
+    # VERIFY FOLDER ACCESS SYNCHRONOUSLY
     # ==================================================
 
     try:
-
-        print()
-        print("=" * 70)
-        print("DRIVE ANALYSIS REQUEST")
-        print("=" * 70)
-
-        print(
-            f"User ID: {user_id}"
-        )
-
-        print(
-            f"Folder ID: {folder_id}"
-        )
-
-        print(
-            f"Folder URL: "
-            f"{payload.folder_url}"
-        )
-
-        # ==================================================
-        # CREATE GOOGLE DRIVE SERVICE
-        # ==================================================
-
-        drive_service = get_drive_service(
-            credentials_data
-        )
-
-        # ==================================================
-        # VERIFY FOLDER ACCESS BEFORE INGESTION
-        # ==================================================
-
-        folder_metadata = get_folder_metadata(
-            drive_service,
-            folder_id,
-        )
-
-        print()
-        print(
-            "GOOGLE DRIVE FOLDER ACCESS OK"
-        )
-
-        print(
-            f"Drive folder name: "
-            f"{folder_metadata.get('name')}"
-        )
-
-        print(
-            f"Drive folder ID: "
-            f"{folder_metadata.get('id')}"
-        )
-
-        # ==================================================
-        # CREATE INGESTION SERVICE
-        # ==================================================
-
-        ingestion = IngestionService(
-            drive_service=drive_service,
-            user_id=user_id,
-        )
-
-        # ==================================================
-        # ANALYZE FOLDER
-        # ==================================================
-
-        result = ingestion.ingest_folder(
-            folder_id
-        )
-
-        # ==================================================
-        # REGISTER ANALYZED FOLDER / FILES
-        # ==================================================
-
-        registry_result = (
-            register_analyzed_folder(
-                user_id=user_id,
-                folder_id=folder_id,
-                folder_url=payload.folder_url,
-                drive_service=drive_service,
-            )
-        )
-
-        # ==================================================
-        # STORE ACTIVE FOLDER
-        # ==================================================
-
-        request.session[
-            "active_folder_id"
-        ] = folder_id
-
-        # ==================================================
-        # FINAL RESPONSE
-        # ==================================================
-
-        response = {
-            "success": True,
-
-            "folder_id": folder_id,
-
-            "folder_name": (
-                registry_result[
-                    "folder_name"
-                ]
-            ),
-
-            "file_count": (
-                registry_result[
-                    "file_count"
-                ]
-            ),
-
-            "chunk_count": (
-                registry_result[
-                    "chunk_count"
-                ]
-            ),
-
-            **result,
-        }
-
-        print()
-        print("=" * 70)
-        print("DRIVE ANALYSIS COMPLETED")
-        print("=" * 70)
-
-        print(
-            f"Folder: "
-            f"{registry_result['folder_name']}"
-        )
-
-        print(
-            f"Files: "
-            f"{registry_result['file_count']}"
-        )
-
-        print(
-            f"Chunks: "
-            f"{registry_result['chunk_count']}"
-        )
-
-        print("=" * 70)
-
-        return response
-
-    # ==================================================
-    # FASTAPI ERROR
-    # ==================================================
-
+        drive_service = get_drive_service(credentials_data)
+        folder_metadata = get_folder_metadata(drive_service, folder_id)
     except HTTPException:
-
         raise
-
-    # ==================================================
-    # GENERAL ERROR
-    # ==================================================
-
     except Exception as error:
-
-        print()
-        print("=" * 70)
-        print("DRIVE ANALYSIS ERROR")
-        print("=" * 70)
-
-        print(
-            f"Error type: "
-            f"{type(error).__name__}"
-        )
-
-        print(
-            f"Error: {error}"
-        )
-
-        print("=" * 70)
-
         raise HTTPException(
             status_code=500,
-            detail=str(error),
+            detail=f"Unable to access Google Drive folder: {error}",
         )
+
+    # Store active folder ID in session
+    request.session["active_folder_id"] = folder_id
+
+    # ==================================================
+    # CREATE BACKGROUND JOB
+    # ==================================================
+
+    job_id = uuid.uuid4().hex
+
+    with ANALYSIS_JOBS_LOCK:
+        ANALYSIS_JOBS[job_id] = {
+            "status": "processing",
+            "progress": "Connecting to Google Drive...",
+            "result": None,
+            "error": None,
+            "folder_id": folder_id,
+            "folder_name": folder_metadata.get("name"),
+        }
+
+    background_tasks.add_task(
+        _run_drive_analysis,
+        job_id=job_id,
+        credentials_data=credentials_data,
+        user_id=user_id,
+        folder_id=folder_id,
+        folder_url=payload.folder_url,
+    )
+
+    return {
+        "status": "processing",
+        "job_id": job_id,
+        "folder_id": folder_id,
+        "folder_name": folder_metadata.get("name"),
+    }

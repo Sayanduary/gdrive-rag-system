@@ -1,3 +1,4 @@
+import threading
 from fastembed import TextEmbedding
 
 from app.db import get_db_pool
@@ -6,17 +7,31 @@ from config import settings
 
 class VectorStore:
 
+    _instance = None
+    _lock = threading.Lock()
+
+    def __new__(cls):
+        if cls._instance is None:
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = super(VectorStore, cls).__new__(cls)
+                    cls._instance._initialized = False
+        return cls._instance
+
     # ==================================================
     # INITIALIZATION
     # ==================================================
 
     def __init__(self):
+        if getattr(self, "_initialized", False):
+            return
 
         self.embedding_model = TextEmbedding(
             model_name=settings.EMBEDDING_MODEL
         )
 
         self.pool = get_db_pool()
+        self._initialized = True
 
     # ==================================================
     # CLOSE

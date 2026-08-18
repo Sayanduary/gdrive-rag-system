@@ -24,6 +24,7 @@ class IngestionService:
         self,
         drive_service,
         user_id: str,
+        vector_store: VectorStore | None = None,
     ):
 
         if not user_id:
@@ -34,7 +35,7 @@ class IngestionService:
         self.drive_service = drive_service
         self.user_id = user_id
 
-        self.vector_store = VectorStore()
+        self.vector_store = vector_store or VectorStore()
 
     # ==================================================
     # INGEST FOLDER
