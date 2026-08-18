@@ -119,7 +119,7 @@ function Login({ user, checkingAuth }) {
               Where Your Data Becomes Knowledge
             </p>
 
-            <p className="mx-auto mt-3 max-w-md text-xs leading-6 text-neutral-700">
+            <p className="mx-auto mt-3 max-w-md text-xs leading-6 text-neutral-400">
               Connect your Google Drive, search your documents, and get
               intelligent answers from your own data.
             </p>
