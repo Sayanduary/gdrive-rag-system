@@ -6,6 +6,8 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
 from googleapiclient.errors import HttpError
 
+from config import settings
+
 
 SCOPES = [
     "https://www.googleapis.com/auth/drive.readonly"
@@ -23,6 +25,11 @@ def get_drive_service(
     Create a Google Drive API service using the currently
     authenticated user's OAuth credentials.
 
+    The session stores only ``token`` and ``refresh_token``
+    to keep the cookie under 4 KB.  Static OAuth config
+    (``token_uri``, ``client_id``, ``client_secret``) is
+    reconstructed from server-side settings.
+
     Automatically refreshes an expired access token when a
     refresh token is available.
     """
@@ -34,10 +41,37 @@ def get_drive_service(
 
     token = credentials_data.get("token")
     refresh_token = credentials_data.get("refresh_token")
-    token_uri = credentials_data.get("token_uri")
-    client_id = credentials_data.get("client_id")
-    client_secret = credentials_data.get("client_secret")
-    scopes = credentials_data.get("scopes") or SCOPES
+
+    # ----------------------------------------------------------
+    # Reconstruct static OAuth config from settings.
+    #
+    # The session cookie intentionally stores ONLY
+    # token + refresh_token to stay under the 4 KB
+    # browser cookie limit.
+    #
+    # Fall back to values stored in the session for
+    # backwards compatibility with existing sessions.
+    # ----------------------------------------------------------
+
+    token_uri = (
+        credentials_data.get("token_uri")
+        or "https://oauth2.googleapis.com/token"
+    )
+
+    client_id = (
+        credentials_data.get("client_id")
+        or settings.GOOGLE_CLIENT_ID
+    )
+
+    client_secret = (
+        credentials_data.get("client_secret")
+        or settings.GOOGLE_CLIENT_SECRET
+    )
+
+    scopes = (
+        credentials_data.get("scopes")
+        or SCOPES
+    )
 
     if not token:
         raise ValueError(

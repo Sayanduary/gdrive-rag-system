@@ -584,6 +584,14 @@ def google_callback(
 
     # ==================================================
     # STORE GOOGLE CREDENTIALS
+    #
+    # IMPORTANT:
+    # Store ONLY token + refresh_token to keep the
+    # session cookie under the 4 KB browser limit.
+    #
+    # Static OAuth config (token_uri, client_id,
+    # client_secret) is reconstructed from settings
+    # at request time by get_drive_service().
     # ==================================================
 
     request.session[
@@ -594,18 +602,6 @@ def google_callback(
 
         "refresh_token":
             credentials.refresh_token,
-
-        "token_uri":
-            credentials.token_uri,
-
-        "client_id":
-            credentials.client_id,
-
-        "client_secret":
-            credentials.client_secret,
-
-        "scopes":
-            credentials.scopes,
     }
 
     # ==================================================
