@@ -29,6 +29,8 @@ const AUTH_MAX_ATTEMPTS = 4;
 
 const SLOW_AUTH_NOTICE_MS = 4000;
 
+const AUTH_RETRY_DELAY_MS = 2000;
+
 // ==================================================
 // LOADING SCREEN
 // ==================================================
@@ -125,6 +127,12 @@ function App() {
 
           console.warn(
             `Auth check attempt ${attempt} failed (${error.code || "network"}). Backend may be waking up, retrying...`,
+          );
+
+          // A refused connection fails instantly, so wait before retrying to
+          // give the container time to come up.
+          await new Promise((resolve) =>
+            setTimeout(resolve, AUTH_RETRY_DELAY_MS * attempt),
           );
         }
       }
