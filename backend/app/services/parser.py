@@ -5,7 +5,7 @@ from PIL import Image
 from pptx import Presentation
 from pptx.enum.shapes import MSO_SHAPE_TYPE
 
-from app.services.groq import GroqService
+from app.services.registry import get_groq_service
 
 
 SUPPORTED_IMAGE_TYPES = {
@@ -14,9 +14,6 @@ SUPPORTED_IMAGE_TYPES = {
     "image/jpg",
     "image/webp",
 }
-
-
-groq = GroqService()
 
 
 # ==================================================
@@ -132,7 +129,7 @@ def ocr_pdf_page(
             f"to Groq Vision..."
         )
 
-        text = groq.ocr_image(
+        text = get_groq_service().ocr_image(
             image_bytes=image_bytes,
             mime_type="image/png",
         )
@@ -333,7 +330,7 @@ def extract_image_text(
             f"{len(file_bytes)} bytes"
         )
 
-        text = groq.ocr_image(
+        text = get_groq_service().ocr_image(
             image_bytes=file_bytes,
             mime_type=mime_type,
         )
@@ -453,7 +450,7 @@ def extract_pptx_shape_text(
                 "with Groq Vision..."
             )
 
-            image_text = groq.ocr_image(
+            image_text = get_groq_service().ocr_image(
                 image_bytes=image_bytes,
                 mime_type=mime_type,
             )

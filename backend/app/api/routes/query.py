@@ -4,16 +4,14 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from app.services.memory import ConversationMemory
 from app.services.rag import RAGService
+from app.services.registry import get_conversation_memory
 
 
 router = APIRouter(
     prefix="/api",
     tags=["RAG"],
 )
-
-memory = ConversationMemory()
 
 
 # ==================================================
@@ -99,7 +97,7 @@ def resolve_conversation(
             )
 
         conversation_id = (
-            memory.create_conversation(
+            get_conversation_memory().create_conversation(
                 user_id=user_id,
                 folder_id=active_folder_id,
                 title=question[:60],
@@ -115,7 +113,7 @@ def resolve_conversation(
     # EXISTING CONVERSATION
     # --------------------------------------------------
 
-    if not memory.conversation_belongs_to_user(
+    if not get_conversation_memory().conversation_belongs_to_user(
         conversation_id,
         user_id,
     ):
@@ -126,7 +124,7 @@ def resolve_conversation(
         )
 
     folder_id = (
-        memory.get_conversation_folder(
+        get_conversation_memory().get_conversation_folder(
             conversation_id,
             user_id,
         )
@@ -201,7 +199,7 @@ def query_documents(
         # History
         # --------------------------------------------------
 
-        history = memory.get_messages(
+        history = get_conversation_memory().get_messages(
             conversation_id=conversation_id,
             limit=20,
         )
@@ -240,7 +238,7 @@ def query_documents(
         # Save user message
         # --------------------------------------------------
 
-        memory.add_message(
+        get_conversation_memory().add_message(
             conversation_id=conversation_id,
             role="user",
             content=question,
@@ -250,7 +248,7 @@ def query_documents(
         # Save assistant message
         # --------------------------------------------------
 
-        memory.add_message(
+        get_conversation_memory().add_message(
             conversation_id=conversation_id,
             role="assistant",
             content=answer,
@@ -328,7 +326,7 @@ def query_documents_stream(
 
     try:
 
-        history = memory.get_messages(
+        history = get_conversation_memory().get_messages(
             conversation_id=conversation_id,
             limit=20,
         )
@@ -469,7 +467,7 @@ def query_documents_stream(
                     # Save user message
                     # --------------------------------------
 
-                    memory.add_message(
+                    get_conversation_memory().add_message(
                         conversation_id=
                             conversation_id,
 
@@ -483,7 +481,7 @@ def query_documents_stream(
                     # Save assistant message
                     # --------------------------------------
 
-                    memory.add_message(
+                    get_conversation_memory().add_message(
                         conversation_id=
                             conversation_id,
 

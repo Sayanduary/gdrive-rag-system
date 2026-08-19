@@ -1,9 +1,9 @@
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
-from app.services.memory import ConversationMemory
-from app.services.analyzed_folders import (
-    AnalyzedFolderService,
+from app.services.registry import (
+    get_conversation_memory,
+    get_folder_service,
 )
 
 
@@ -12,12 +12,6 @@ router = APIRouter(
     tags=["Conversations"],
 )
 
-
-memory = ConversationMemory()
-
-folder_service = (
-    AnalyzedFolderService()
-)
 
 
 class RenameConversationRequest(BaseModel):
@@ -80,7 +74,7 @@ def create_conversation(
 
     if not folder_id:
         folder_id = (
-            folder_service.get_latest_user_folder(
+            get_folder_service().get_latest_user_folder(
                 user_id
             )
         )
@@ -111,7 +105,7 @@ def create_conversation(
     # --------------------------------------------------
 
     conversation_id = (
-        memory.create_conversation(
+        get_conversation_memory().create_conversation(
             user_id=user_id,
             folder_id=folder_id,
             title="New Chat",
@@ -135,7 +129,7 @@ def list_conversations(
     user_id = get_user_id(request)
 
     conversations = (
-        memory.get_user_conversations(
+        get_conversation_memory().get_user_conversations(
             user_id
         )
     )
@@ -160,7 +154,7 @@ def get_conversation(
     # Ownership check
     # --------------------------------------------------
 
-    if not memory.conversation_belongs_to_user(
+    if not get_conversation_memory().conversation_belongs_to_user(
         conversation_id,
         user_id,
     ):
@@ -173,7 +167,7 @@ def get_conversation(
     # Messages
     # --------------------------------------------------
 
-    messages = memory.get_messages(
+    messages = get_conversation_memory().get_messages(
         conversation_id=conversation_id,
     )
 
@@ -182,7 +176,7 @@ def get_conversation(
     # --------------------------------------------------
 
     folder_id = (
-        memory.get_conversation_folder(
+        get_conversation_memory().get_conversation_folder(
             conversation_id,
             user_id,
         )
@@ -231,7 +225,7 @@ def rename_conversation(
     # Ownership check
     # --------------------------------------------------
 
-    if not memory.conversation_belongs_to_user(
+    if not get_conversation_memory().conversation_belongs_to_user(
         conversation_id,
         user_id,
     ):
@@ -240,7 +234,7 @@ def rename_conversation(
             detail="Conversation not found.",
         )
 
-    memory.rename_conversation(
+    get_conversation_memory().rename_conversation(
         conversation_id,
         user_id,
         title,
@@ -266,7 +260,7 @@ def delete_conversation(
     # Ownership check
     # --------------------------------------------------
 
-    if not memory.conversation_belongs_to_user(
+    if not get_conversation_memory().conversation_belongs_to_user(
         conversation_id,
         user_id,
     ):
@@ -275,7 +269,7 @@ def delete_conversation(
             detail="Conversation not found.",
         )
 
-    deleted = memory.delete_conversation(
+    deleted = get_conversation_memory().delete_conversation(
         conversation_id,
         user_id,
     )

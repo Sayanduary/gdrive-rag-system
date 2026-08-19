@@ -35,6 +35,10 @@ if ENVIRONMENT != "production":
 # FASTAPI
 # ==================================================
 
+import threading
+
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 
 from fastapi.middleware.cors import (
@@ -72,6 +76,44 @@ from app.api.routes.folders import (
     router as folders_router,
 )
 
+from app.services.registry import (
+    warmup_services,
+)
+
+
+# ==================================================
+# WARMUP
+# ==================================================
+
+# The embedding model and PostgreSQL pool are built lazily so a cold start
+# serves session endpoints (/api/auth/me) immediately. A background thread
+# builds them right after startup so the first Drive/chat request is fast.
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+
+    def run():
+
+        try:
+
+            warmup_services()
+
+            print("Warmup complete: embeddings and database ready.")
+
+        except Exception as error:
+
+            print(
+                f"Warmup failed ({type(error).__name__}): {error}"
+            )
+
+    threading.Thread(
+        target=run,
+        name="zentra-warmup",
+        daemon=True,
+    ).start()
+
+    yield
+
 
 # ==================================================
 # APPLICATION
@@ -80,6 +122,7 @@ from app.api.routes.folders import (
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
+    lifespan=lifespan,
 )
 
 
