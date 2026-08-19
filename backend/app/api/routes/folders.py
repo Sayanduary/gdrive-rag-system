@@ -1,8 +1,6 @@
 from fastapi import APIRouter, HTTPException, Request
 
-from app.services.analyzed_folders import (
-    AnalyzedFolderService,
-)
+from app.services.registry import get_folder_service
 
 
 router = APIRouter(
@@ -10,8 +8,6 @@ router = APIRouter(
     tags=["Analyzed Folders"],
 )
 
-
-folder_service = AnalyzedFolderService()
 
 
 def get_user_id(
@@ -50,7 +46,7 @@ def list_analyzed_folders(
     user_id = get_user_id(request)
 
     folders = (
-        folder_service.get_user_folders(
+        get_folder_service().get_user_folders(
             user_id
         )
     )
@@ -72,7 +68,7 @@ def get_analyzed_folder(
     user_id = get_user_id(request)
 
     folder = (
-        folder_service.get_folder(
+        get_folder_service().get_folder(
             user_id,
             folder_id,
         )
@@ -85,7 +81,7 @@ def get_analyzed_folder(
         )
 
     files = (
-        folder_service.get_folder_files(
+        get_folder_service().get_folder_files(
             user_id,
             folder_id,
         )
@@ -109,7 +105,7 @@ def list_folder_files(
     user_id = get_user_id(request)
 
     folder = (
-        folder_service.get_folder(
+        get_folder_service().get_folder(
             user_id,
             folder_id,
         )
@@ -122,7 +118,7 @@ def list_folder_files(
         )
 
     files = (
-        folder_service.get_folder_files(
+        get_folder_service().get_folder_files(
             user_id,
             folder_id,
         )
@@ -147,7 +143,7 @@ def delete_analyzed_file(
     user_id = get_user_id(request)
 
     result = (
-        folder_service.delete_file(
+        get_folder_service().delete_file(
             user_id=user_id,
             folder_id=folder_id,
             file_id=file_id,
@@ -189,7 +185,7 @@ def delete_analyzed_folder(
     user_id = get_user_id(request)
 
     result = (
-        folder_service.delete_folder(
+        get_folder_service().delete_folder(
             user_id=user_id,
             folder_id=folder_id,
         )

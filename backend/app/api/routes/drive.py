@@ -7,9 +7,9 @@ from pydantic import BaseModel
 
 from app.services.gdrive import get_drive_service
 from app.services.ingestion import IngestionService
-from app.services.vectorstore import VectorStore
-from app.services.analyzed_folders import (
-    AnalyzedFolderService,
+from app.services.registry import (
+    get_folder_service,
+    get_vector_store,
 )
 
 
@@ -30,14 +30,6 @@ class DriveAnalyzeRequest(BaseModel):
 
     folder_url: str
 
-
-# ==================================================
-# SERVICES
-# ==================================================
-
-vector_store = VectorStore()
-
-folder_service = AnalyzedFolderService()
 
 
 # ==================================================
@@ -442,7 +434,7 @@ def register_analyzed_folder(
     # ==================================================
 
     indexed_files = (
-        vector_store.get_indexed_files(
+        get_vector_store().get_indexed_files(
             user_id=user_id,
             folder_id=folder_id,
         )
@@ -478,7 +470,7 @@ def register_analyzed_folder(
     # ==================================================
 
     existing_files = (
-        folder_service.get_folder_files(
+        get_folder_service().get_folder_files(
             user_id=user_id,
             folder_id=folder_id,
         )
@@ -499,7 +491,7 @@ def register_analyzed_folder(
 
             try:
 
-                folder_service.delete_file(
+                get_folder_service().delete_file(
                     user_id=user_id,
                     folder_id=folder_id,
                     file_id=existing_file_id,
@@ -546,14 +538,14 @@ def register_analyzed_folder(
         try:
 
             chunk_count = (
-                vector_store.count_file(
+                get_vector_store().count_file(
                     user_id=user_id,
                     folder_id=folder_id,
                     file_id=file_id,
                 )
             )
 
-            folder_service.upsert_file(
+            get_folder_service().upsert_file(
                 user_id=user_id,
                 folder_id=folder_id,
                 file_id=file_id,
@@ -586,7 +578,7 @@ def register_analyzed_folder(
     # REGISTER FOLDER SUMMARY
     # ==================================================
 
-    folder_service.upsert_folder(
+    get_folder_service().upsert_folder(
         user_id=user_id,
         folder_id=folder_id,
         folder_name=folder_name,
@@ -642,7 +634,7 @@ def _run_drive_analysis(
         ingestion = IngestionService(
             drive_service=drive_service,
             user_id=user_id,
-            vector_store=vector_store,
+            vector_store=get_vector_store(),
         )
 
         result = ingestion.ingest_folder(folder_id)

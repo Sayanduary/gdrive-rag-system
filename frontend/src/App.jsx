@@ -17,10 +17,23 @@ const STORAGE_KEY = "gdrive_rag_session";
 const ACTIVE_CHAT_KEY = "gdrive_rag_active_conversation";
 
 // ==================================================
+// AUTH CHECK TUNING
+// ==================================================
+
+// The backend sleeps when idle, so the very first request can take a while
+// to come back while the container boots.
+
+const AUTH_REQUEST_TIMEOUT_MS = 15000;
+
+const AUTH_MAX_ATTEMPTS = 4;
+
+const SLOW_AUTH_NOTICE_MS = 4000;
+
+// ==================================================
 // LOADING SCREEN
 // ==================================================
 
-function LoadingScreen() {
+function LoadingScreen({ slow = false }) {
   return (
     <div className="flex min-h-screen items-center justify-center bg-[#0d0d0d] text-white">
       <div className="flex flex-col items-center gap-4">
@@ -37,6 +50,13 @@ function LoadingScreen() {
         />
 
         <p className="text-sm text-neutral-500">Checking authentication...</p>
+
+        {slow && (
+          <p className="max-w-xs text-center text-xs text-neutral-600">
+            The server is waking up after being idle. This can take up to a
+            minute the first time.
+          </p>
+        )}
       </div>
     </div>
   );
@@ -46,9 +66,9 @@ function LoadingScreen() {
 // PROTECTED ROUTE
 // ==================================================
 
-function ProtectedRoute({ user, checkingAuth, children }) {
+function ProtectedRoute({ user, checkingAuth, slowAuth, children }) {
   if (checkingAuth) {
-    return <LoadingScreen />;
+    return <LoadingScreen slow={slowAuth} />;
   }
 
   if (!user) {
@@ -67,6 +87,8 @@ function App() {
 
   const [checkingAuth, setCheckingAuth] = useState(true);
 
+  const [slowAuth, setSlowAuth] = useState(false);
+
   const [analysis, setAnalysis] = useState(null);
 
   // ==================================================
@@ -76,11 +98,45 @@ function App() {
   useEffect(() => {
     let ignore = false;
 
+    const slowTimer = setTimeout(() => {
+      if (!ignore) {
+        setSlowAuth(true);
+      }
+    }, SLOW_AUTH_NOTICE_MS);
+
+    // Retries the session lookup while the backend is still booting, instead
+    // of failing the whole app on the first timed out request.
+    async function fetchSession() {
+      let lastError = null;
+
+      for (let attempt = 1; attempt <= AUTH_MAX_ATTEMPTS; attempt += 1) {
+        try {
+          return await api.get(`/api/auth/me?_=${Date.now()}`, {
+            timeout: AUTH_REQUEST_TIMEOUT_MS,
+          });
+        } catch (error) {
+          lastError = error;
+
+          const isColdStart = !error.response || error.code === "ECONNABORTED";
+
+          if (ignore || !isColdStart || attempt === AUTH_MAX_ATTEMPTS) {
+            throw error;
+          }
+
+          console.warn(
+            `Auth check attempt ${attempt} failed (${error.code || "network"}). Backend may be waking up, retrying...`,
+          );
+        }
+      }
+
+      throw lastError;
+    }
+
     async function checkAuthentication() {
       try {
         setCheckingAuth(true);
 
-        const response = await api.get(`/api/auth/me?_=${Date.now()}`);
+        const response = await fetchSession();
 
         if (ignore) {
           return;
@@ -146,6 +202,8 @@ function App() {
 
     return () => {
       ignore = true;
+
+      clearTimeout(slowTimer);
     };
   }, []);
 
@@ -232,7 +290,7 @@ function App() {
 
   function RootRoute() {
     if (checkingAuth) {
-      return <LoadingScreen />;
+      return <LoadingScreen slow={slowAuth} />;
     }
 
     if (!user) {
@@ -270,7 +328,11 @@ function App() {
       <Route
         path="/dashboard"
         element={
-          <ProtectedRoute user={user} checkingAuth={checkingAuth}>
+          <ProtectedRoute
+            user={user}
+            checkingAuth={checkingAuth}
+            slowAuth={slowAuth}
+          >
             <Dashboard
               key={`dashboard-${userKey}`}
               user={user}
@@ -287,7 +349,11 @@ function App() {
       <Route
         path="/analyze"
         element={
-          <ProtectedRoute user={user} checkingAuth={checkingAuth}>
+          <ProtectedRoute
+            user={user}
+            checkingAuth={checkingAuth}
+            slowAuth={slowAuth}
+          >
             <Analyze
               key={`analyze-${userKey}`}
               user={user}
@@ -305,7 +371,11 @@ function App() {
       <Route
         path="/chat"
         element={
-          <ProtectedRoute user={user} checkingAuth={checkingAuth}>
+          <ProtectedRoute
+            user={user}
+            checkingAuth={checkingAuth}
+            slowAuth={slowAuth}
+          >
             <Chat
               key={`chat-${userKey}`}
               user={user}
