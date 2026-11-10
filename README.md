@@ -2,6 +2,9 @@
 
 A full-stack, enterprise-grade Retrieval-Augmented Generation (RAG) platform that connects directly to **Google Drive**, recursively ingests and parses documents (PDFs, Google Docs, Slides, Sheets, images, presentations), generates vector embeddings stored in **PostgreSQL (`pgvector`)**, and delivers real-time streaming answers backed by source citations using **Groq LLM**.
 
+For buyer handoff, deployment, environment variables, and operational guidance,
+see the [skills and operations guide](./skills.md).
+
 ---
 
 ## Architecture Overview
